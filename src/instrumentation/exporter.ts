@@ -1,6 +1,6 @@
 import { ExportResult, ExportResultCode } from "@opentelemetry/core";
 import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-node";
-import { SpanMapper } from "../core/span-mapper";
+import SpanMapper from "./span-mapper";
 
 
 export default class ServerDevToolsExporter implements SpanExporter {

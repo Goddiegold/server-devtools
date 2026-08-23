@@ -3,7 +3,7 @@ import { IDevToolsSpan, DevToolsSpanType } from "../types";
 import { SpanKind } from "@opentelemetry/api";
 
 
-export class SpanMapper {
+export default class SpanMapper {
 
     map(span: ReadableSpan): IDevToolsSpan {
         const context = span.spanContext();
@@ -11,9 +11,9 @@ export class SpanMapper {
         return {
             traceId: context.traceId,
             spanId: context.spanId,
-            parentSpanId: span.parentSpanId,
+            parentSpanId: span.parentSpanContext?.spanId,
 
-            type: this.getType(span.name),
+            type: this.getType(span),
 
             name: span.name,
 
