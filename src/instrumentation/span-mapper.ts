@@ -32,6 +32,10 @@ export default class SpanMapper {
     }
 
     private getType(span: ReadableSpan): DevToolsSpanType {
+        if (span.attributes['express.type']) {
+            return 'framework';
+        }
+
         switch (span.kind) {
             case SpanKind.SERVER:
                 return 'http.server';

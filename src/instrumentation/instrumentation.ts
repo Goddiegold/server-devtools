@@ -5,6 +5,7 @@ import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import ServerDevToolsExporter from "./exporter";
 import TraceAssembler from "../core/trace-assembler";
 import TraceStore from "../core/trace-store";
+import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 
 
 export class Instrumentation {
@@ -23,6 +24,7 @@ export class Instrumentation {
             instrumentations: [
                 new HttpInstrumentation(),
                 new UndiciInstrumentation(),
+                new ExpressInstrumentation(),
             ],
         });
     }

@@ -37,7 +37,46 @@ const span = {
   },
 } as unknown as ReadableSpan;
 
+const expressSpan = {
+  spanContext() {
+    return {
+      traceId: 'trace-123',
+      spanId: 'express-123',
+      traceFlags: 1,
+    };
+  },
+
+  parentSpanContext: {
+    traceId: 'trace-123',
+    spanId: 'server-123',
+    traceFlags: 1,
+  },
+
+  kind: SpanKind.INTERNAL,
+
+  name: 'request handler - /users/:id',
+
+  startTime: [100, 0],
+  duration: [0, 100_000_000],
+
+  attributes: {
+    'http.route': '/users/:id',
+    'express.name': '/users/:id',
+    'express.type': 'request_handler',
+  },
+
+  status: {
+    code: 0,
+  },
+} as unknown as ReadableSpan;
+
 const mapper = new SpanMapper();
+
+const expressResult = mapper.map(expressSpan);
+
+assert.equal(expressResult.type, 'framework');
+
+// const mapper = new SpanMapper();
 
 const result = mapper.map(span);
 

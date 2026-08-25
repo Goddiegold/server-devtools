@@ -28,9 +28,9 @@ export default class ServerDevToolsExporter implements SpanExporter {
 
             if (trace) {
                 this.traceStore.add(trace);
-                //    console.dir(this.traceStore.get(trace.traceId), {
-                //                     depth: null,
-                //                 });
+                console.dir(this.traceStore.get(trace.traceId), {
+                    depth: null,
+                });
             }
         }
 

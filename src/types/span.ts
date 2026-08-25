@@ -4,9 +4,10 @@ export type DevToolsSpanType =
   | 'http.server'
   | 'http.client'
   | 'database'
+  | 'framework'
   | 'unknown';
 
-  export interface IDevToolsSpan {
+export interface IDevToolsSpan {
   traceId: string;
   spanId: string;
   parentSpanId?: string;
