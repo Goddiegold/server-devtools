@@ -2,10 +2,12 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import Config from "../config";
 import TraceStore from "../core/trace-store";
 import DashboardRequestMapper from './dashboard-request-mapper';
+import ExecutionTreeBuilder from "../core/execution-tree-builder";
 
 
 export default class DashboardServer {
     private readonly requestMapper = new DashboardRequestMapper();
+    private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     // private server?: Server;
 
 
@@ -18,6 +20,36 @@ export default class DashboardServer {
         res: ServerResponse,) {
         const requestUrl = req.url ?? '';
         const pathname = requestUrl.split('?')[0];
+
+        if (req.method === Config.REQUEST_METHOD.GET &&
+            req.url?.startsWith(`${Config.DASHBOARD_API_ROUTES.TRACES}/`) &&
+            req.url.endsWith("/execution")) {
+            const prefix = `${Config.DASHBOARD_API_ROUTES.TRACES}/`;
+
+
+            const traceId = req.url
+                .slice(prefix.length)
+                .replace(/\/execution$/, "");
+
+
+            const trace = this.traceStore.get(traceId);
+
+            if (!trace) {
+                res.statusCode = 404;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Trace not found",
+                }));
+                return;
+            }
+
+            const executionTree = this.executionTreeBuilder.build(trace);
+
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify(executionTree));
+            return;
+        }
 
         if (
             req.method === Config.REQUEST_METHOD.GET &&
@@ -44,7 +76,6 @@ export default class DashboardServer {
             return;
         }
 
-
         if (
             req.method === Config.REQUEST_METHOD.GET &&
             pathname === Config.DASHBOARD_API_ROUTES.REQUESTS) {
@@ -61,39 +92,5 @@ export default class DashboardServer {
         res.end("Not Found");
     }
 
-
-    // start(port: number): Promise<void> {
-    //     return new Promise((resolve, reject) => {
-    //         this.server = createServer((req, res) => {
-    //             this.handle(req, res);
-    //         });
-
-    //         this.server.once("error", reject);
-
-    //         this.server.listen(port, () => {
-    //             this.server?.removeListener("error", reject);
-    //             resolve();
-    //         });
-    //     });
-    // }
-
-    // stop(): Promise<void> {
-    //     return new Promise((resolve, reject) => {
-    //         if (!this.server) {
-    //             resolve();
-    //             return;
-    //         }
-
-    //         this.server.close((error) => {
-    //             if (error) {
-    //                 reject(error);
-    //                 return;
-    //             }
-
-    //             this.server = undefined;
-    //             resolve();
-    //         });
-    //     });
-    // }
 
 }

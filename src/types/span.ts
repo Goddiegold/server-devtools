@@ -31,3 +31,8 @@ export interface IDevToolsSpan {
     stack?: string;
   };
 }
+
+export interface IExecutionNode {
+    span: IDevToolsSpan;
+    children: IExecutionNode[];
+}

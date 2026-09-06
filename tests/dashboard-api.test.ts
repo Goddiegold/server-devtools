@@ -3,6 +3,7 @@ import http from 'node:http';
 
 import TraceStore from '../src/core/trace-store';
 import DashboardServer from '../src/dashboard/dashboard-server';
+import { IDevToolsTrace } from '../src/types';
 
 async function run() {
   // 1. Create our in-memory trace store
@@ -92,6 +93,70 @@ async function run() {
     assert.deepEqual(await missingTraceResponse.json(), {
       message: 'Trace not found',
     });
+
+    const executionTrace: IDevToolsTrace = {
+      traceId: "trace-execution",
+      rootSpanId: "root-execution",
+      startedAt: 1000,
+      durationMs: 200,
+      spans: [
+        {
+          traceId: "trace-execution",
+          spanId: "root-execution",
+          type: "http.server",
+          name: "GET /users",
+          startedAt: 1000,
+          durationMs: 200,
+          attributes: {
+            "http.request.method": "GET",
+            "url.path": "/users",
+            "http.response.status_code": 200,
+          },
+          status: { code: 0 },
+        },
+        {
+          traceId: "trace-execution",
+          spanId: "db-execution",
+          parentSpanId: "root-execution",
+          type: "database",
+          name: "find users",
+          startedAt: 1020,
+          durationMs: 20,
+          attributes: {},
+          status: { code: 0 },
+        },
+      ],
+    };
+    traceStore.add(executionTrace);
+
+    const executionResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-execution/execution`
+    );
+
+    assert.equal(executionResponse.status, 200);
+
+    const executionResponseBody = await executionResponse.json();
+
+    assert.equal(executionResponseBody.length, 1);
+
+    assert.equal(
+      executionResponseBody[0].span.spanId,
+      "root-execution"
+    );
+
+    assert.equal(
+      executionResponseBody[0].children.length,
+      1
+    );
+
+    assert.equal(
+      executionResponseBody[0].children[0].span.spanId,
+      "db-execution"
+    );
+
+
+    console.log('Dashboard API test passed');
+
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
