@@ -1,5 +1,30 @@
 import type { IExecutionNode } from "@/types"
 
+function spanAttribute(span: IExecutionNode["span"], key: string) {
+  const value = span.attributes[key]
+  return value === undefined || value === null ? undefined : String(value)
+}
+
+function getSpanLabel(span: IExecutionNode["span"]): string {
+  switch (span.type) {
+    case "http.server": {
+      const method = spanAttribute(span, "http.request.method") ?? span.name
+      const path = spanAttribute(span, "url.path")
+      return path ? `${method} ${path}` : span.name
+    }
+
+    case "http.client": {
+      const method = spanAttribute(span, "http.request.method") ?? span.name
+      const target =
+        spanAttribute(span, "url.full") ?? spanAttribute(span, "server.address")
+      return target ? `${method} ${target}` : span.name
+    }
+
+    default:
+      return span.name
+  }
+}
+
 function formatDuration(durationMs: number) {
   if (durationMs >= 1000) {
     return `${(durationMs / 1000).toFixed(1)}s`
@@ -43,7 +68,7 @@ function ExecutionTreeNode({ node, depth = 0 }: { node: IExecutionNode; depth?: 
         }`}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-mono">{node.span.name}</span>
+          <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
           {typeLabel && (
             <span className="shrink-0 text-[10px] tracking-wide text-muted-foreground">
               {typeLabel}
