@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react"
 
+import { getExecutionTree } from "@/api/execution"
 import { getTrace } from "@/api/traces"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import type { IDevToolsSpan, IDevToolsTrace } from "@/types"
+import { ExecutionTree } from "@/components/execution-tree"
+import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
 
 interface TraceDetailsPageProps {
   traceId: string
@@ -25,6 +27,10 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
   const [trace, setTrace] = useState<IDevToolsTrace | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("Overview")
+  const [executionTree, setExecutionTree] = useState<IExecutionNode[] | null>(null)
+  const [executionLoading, setExecutionLoading] = useState(false)
+  const [executionError, setExecutionError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -32,6 +38,9 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
     async function loadTrace() {
       setLoading(true)
       setError(null)
+      setExecutionTree(null)
+      setExecutionError(null)
+      setActiveTab("Overview")
 
       try {
         const data = await getTrace(traceId)
@@ -60,6 +69,39 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
       active = false
     }
   }, [traceId])
+
+  useEffect(() => {
+    if (activeTab !== "Execution" || executionTree !== null) {
+      return
+    }
+
+    let active = true
+
+    void getExecutionTree(traceId)
+      .then((data) => {
+        if (active) {
+          setExecutionTree(data)
+        }
+      })
+      .catch((executionFetchError) => {
+        if (active) {
+          setExecutionError(
+            executionFetchError instanceof Error
+              ? executionFetchError.message
+              : "Failed to load execution data"
+          )
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setExecutionLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [activeTab, executionTree, traceId])
 
   const span = trace ? rootHttpSpan(trace) : undefined
   const method = attributeString(span, "http.request.method") ?? "UNKNOWN"
@@ -113,25 +155,56 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
           </section>
 
           <nav className="mt-6 flex gap-2 border-b pb-2 text-sm">
-            {["Overview", "Execution", "Request", "Response", "Error"].map(
-              (tab, index) => (
-                <Button
-                  key={tab}
-                  variant={index === 0 ? "secondary" : "ghost"}
-                  size="sm"
-                >
-                  {tab}
-                </Button>
-              )
-            )}
+            {["Overview", "Execution", "Request", "Response", "Error"].map((tab) => (
+              <Button
+                key={tab}
+                variant={activeTab === tab ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => {
+                  if (tab === "Execution" && executionTree === null) {
+                    setExecutionLoading(true)
+                    setExecutionError(null)
+                  }
+                  setActiveTab(tab)
+                }}
+              >
+                {tab}
+              </Button>
+            ))}
           </nav>
 
-          <section className="mt-6 rounded-md border p-4">
-            <h2 className="mb-2 text-sm font-semibold">Trace data</h2>
-            <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs">
-              {JSON.stringify(trace, null, 2)}
-            </pre>
-          </section>
+          {activeTab === "Execution" ? (
+            <section className="mt-6 rounded-md border p-4">
+              <h2 className="mb-3 text-sm font-semibold">Execution</h2>
+
+              {executionLoading && (
+                <p className="text-sm text-muted-foreground">
+                  Loading execution data...
+                </p>
+              )}
+
+              {!executionLoading && executionError && (
+                <p className="text-sm text-destructive">{executionError}</p>
+              )}
+
+              {!executionLoading && !executionError && executionTree?.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No execution data available.
+                </p>
+              )}
+
+              {!executionLoading && !executionError && executionTree && executionTree.length > 0 && (
+                <ExecutionTree nodes={executionTree} />
+              )}
+            </section>
+          ) : (
+            <section className="mt-6 rounded-md border p-4">
+              <h2 className="mb-2 text-sm font-semibold">{activeTab}</h2>
+              <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs">
+                {JSON.stringify(trace, null, 2)}
+              </pre>
+            </section>
+          )}
         </>
       )}
     </main>

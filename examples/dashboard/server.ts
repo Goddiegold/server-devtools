@@ -9,7 +9,7 @@ async function bootstrap() {
   // the application.
   await devtools.start();
 
-    const { default: express } = await import("express");
+  const { default: express } = await import("express");
   const app = express();
 
   // ServerDevTools runs on the SAME Express server.
@@ -30,7 +30,10 @@ async function bootstrap() {
     next();
   });
 
-  app.get("/users/:id", (req, res) => {
+  app.get("/users/:id", async (req, res) => {
+    const response = await fetch('https://example.com');
+
+    await response.text();
     res.json({
       id: req.params.id,
       name: "John Doe",

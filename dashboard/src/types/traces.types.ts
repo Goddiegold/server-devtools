@@ -26,3 +26,8 @@ export interface IDevToolsTrace {
   startedAt: number
   durationMs?: number
 }
+
+export interface IExecutionNode {
+  span: IDevToolsSpan
+  children: IExecutionNode[]
+}
