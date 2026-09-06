@@ -26,7 +26,7 @@ export class Instrumentation {
                 new HttpInstrumentation(
                     {
                         ignoreIncomingRequestHook: (request) => {
-                            return request.url?.startsWith("/_devtools") ?? false;
+                            return request.url?.split('?')[0].startsWith("/_devtools") ?? false;
                         },
                     }
                 ),

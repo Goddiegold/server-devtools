@@ -76,6 +76,22 @@ async function run() {
         hasError: false,
       },
     ]);
+
+    const traceResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-123`,
+    );
+
+    assert.equal(traceResponse.status, 200);
+    assert.deepEqual(await traceResponse.json(), traceStore.get('trace-123'));
+
+    const missingTraceResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/traces/missing`,
+    );
+
+    assert.equal(missingTraceResponse.status, 404);
+    assert.deepEqual(await missingTraceResponse.json(), {
+      message: 'Trace not found',
+    });
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {

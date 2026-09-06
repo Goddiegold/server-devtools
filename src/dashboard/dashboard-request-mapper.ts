@@ -5,7 +5,6 @@ export default class DashboardRequestMapper {
 
     map(trace: IDevToolsTrace): IDashboardRequest {
         const rootSpan = trace.spans.find(span => span.spanId === trace.rootSpanId && span.type === 'http.server')
-        console.log(JSON.stringify({ trace }, null, 2));
 
         if (!rootSpan) {
             throw new Error(

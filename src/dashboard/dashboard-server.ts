@@ -16,21 +16,38 @@ export default class DashboardServer {
 
     handle(req: IncomingMessage,
         res: ServerResponse,) {
+        const requestUrl = req.url ?? '';
+        const pathname = requestUrl.split('?')[0];
+
         if (
             req.method === Config.REQUEST_METHOD.GET &&
-            req.url === Config.DASHBOARD_API_ROUTES.TRACES) {
-            // res.writeHead(200, { 'Content-Type': 'application/json' });
+            pathname.startsWith(`${Config.DASHBOARD_API_ROUTES.TRACES}/`)
+        ) {
+            const traceId = decodeURIComponent(pathname.slice(
+                `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
+            ));
 
-            res.statusCode = 200
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(this.traceStore.getAll()));
+            const trace = this.traceStore.get(traceId);
+
+            if (!trace) {
+                res.statusCode = 404;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Trace not found",
+                }));
+                return;
+            }
+
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify(trace));
             return;
         }
 
 
         if (
             req.method === Config.REQUEST_METHOD.GET &&
-            req.url === Config.DASHBOARD_API_ROUTES.REQUESTS) {
+            pathname === Config.DASHBOARD_API_ROUTES.REQUESTS) {
             const requests = this.traceStore.getAll().map(trace => this.requestMapper.map(trace));
 
             res.statusCode = 200
