@@ -17,7 +17,9 @@ export default class ServerDevToolsExporter implements SpanExporter {
         spans: ReadableSpan[],
         resultCallback: (result: ExportResult) => void,
     ): void {
+
         for (const span of spans) {
+            // console.log("EXPORTED SPAN:", span.name);
             console.dir(span.events, {
                 depth: null,
             });

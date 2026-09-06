@@ -23,7 +23,13 @@ export class Instrumentation {
                 new SimpleSpanProcessor(new ServerDevToolsExporter(traceAssembler, traceStore)),
             ],
             instrumentations: [
-                new HttpInstrumentation(),
+                new HttpInstrumentation(
+                    {
+                        ignoreIncomingRequestHook: (request) => {
+                            return request.url?.startsWith("/_devtools") ?? false;
+                        },
+                    }
+                ),
                 new UndiciInstrumentation(),
                 new ExpressInstrumentation(),
                 new MongoDBInstrumentation({

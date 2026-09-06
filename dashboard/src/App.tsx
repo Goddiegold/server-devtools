@@ -1,121 +1,149 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react"
+
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { getRequests } from "@/api/requests"
+import type { IDashboardRequest } from "@/types"
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [requests, setRequests] = useState<IDashboardRequest[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // useEffect(() => {
+  //   async function loadRequests() {
+  //     try {
+  //       setLoading(true)
+  //       const data = await getRequests()
+  //       setRequests(data)
+  //     } catch (error) {
+  //       setError(
+  //         error instanceof Error
+  //           ? error.message
+  //           : "Failed to load requests"
+  //       )
+  //     } finally {
+  //       setLoading(false)
+  //     }
+  //   }
+
+  //   loadRequests()
+  // }, [])
+  useEffect(() => {
+    async function loadRequests() {
+      try {
+        setLoading(true)
+        const data = await getRequests()
+        setRequests(data)
+        setError(null)
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load requests"
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadRequests()
+
+    const interval = setInterval(loadRequests, 1000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [])
+
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="flex h-14 items-center justify-between border-b px-6">
+        <div className="font-semibold">
+          ServerDevTools
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+
+        <Badge variant="outline">
+          <span className="mr-2 size-2 rounded-full bg-green-500" />
+          LIVE
+        </Badge>
+      </header>
+
+      <main className="p-6">
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold">Requests</h1>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Inspect incoming requests and their execution.
           </p>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <div className="mb-4 max-w-md">
+          <Input placeholder="Search requests..." />
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">METHOD</th>
+                <th className="px-4 py-3 font-medium">PATH</th>
+                <th className="px-4 py-3 font-medium">STATUS</th>
+                <th className="px-4 py-3 text-right font-medium">
+                  DURATION
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {requests.map((request) => (
+                <tr
+                  key={request.id}
+                  className="border-b last:border-b-0 hover:bg-muted/40"
+                >
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {request.method}
+                  </td>
+
+                  <td className="px-4 py-3 font-mono">
+                    {request.path}
+                  </td>
+
+                  <td className="px-4 py-3 font-mono">
+                    {request.statusCode ?? "—"}
+                  </td>
+
+                  <td className="px-4 py-3 text-right font-mono">
+                    {request.durationMs !== undefined
+                      ? `${request.durationMs.toFixed(1)}ms`
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {loading && (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              Loading requests...
+            </div>
+          )}
+
+          {error && (
+            <div className="p-6 text-center text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && requests.length === 0 && (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No requests captured yet.
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   )
 }
 

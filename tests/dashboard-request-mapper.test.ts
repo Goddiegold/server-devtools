@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 
 import DashboardRequestMapper from '../src/dashboard/dashboard-request-mapper';
-import { DevToolsTrace } from '../src/types/devtools-trace';
+import { IDevToolsTrace } from '../src/types';
 
 function run() {
   const mapper = new DashboardRequestMapper();
 
-  const trace: DevToolsTrace = {
+  const trace: IDevToolsTrace = {
     traceId: 'trace-123',
     rootSpanId: 'root-span',
     startedAt: 1000,
