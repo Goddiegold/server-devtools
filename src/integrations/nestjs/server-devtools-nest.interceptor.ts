@@ -2,8 +2,7 @@
 import {
     CallHandler,
     ExecutionContext,
-    Injectable,
-    NestInterceptor,
+    NestInterceptor
 } from '@nestjs/common';
 import {
     SpanStatusCode,
