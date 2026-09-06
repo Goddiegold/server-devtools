@@ -8,6 +8,10 @@ export default class SpanMapper {
     map(span: ReadableSpan): IDevToolsSpan {
         const context = span.spanContext();
 
+        const exceptionEvent = span?.events?.find(
+            (event) => event.name === 'exception',
+        );
+
         return {
             traceId: context.traceId,
             spanId: context.spanId,
@@ -28,10 +32,24 @@ export default class SpanMapper {
                 code: span.status.code,
                 message: span.status.message,
             },
+            error: exceptionEvent
+                ? {
+                    type:
+                        exceptionEvent.attributes?.['exception.type']?.toString(),
+                    message:
+                        exceptionEvent.attributes?.['exception.message']?.toString(),
+                    stack:
+                        exceptionEvent.attributes?.['exception.stacktrace']?.toString(),
+                }
+                : undefined,
         }
     }
 
     private getType(span: ReadableSpan): DevToolsSpanType {
+        if (span.attributes['db.system.name']) {
+            return 'database';
+        }
+
         if (span.attributes['express.type']) {
             return 'framework';
         }

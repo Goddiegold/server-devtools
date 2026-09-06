@@ -6,6 +6,7 @@ import ServerDevToolsExporter from "./exporter";
 import TraceAssembler from "../core/trace-assembler";
 import TraceStore from "../core/trace-store";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
+import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
 
 
 export class Instrumentation {
@@ -25,6 +26,9 @@ export class Instrumentation {
                 new HttpInstrumentation(),
                 new UndiciInstrumentation(),
                 new ExpressInstrumentation(),
+                new MongoDBInstrumentation({
+                    enhancedDatabaseReporting: false,
+                }),
             ],
         });
     }

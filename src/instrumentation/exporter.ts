@@ -18,6 +18,10 @@ export default class ServerDevToolsExporter implements SpanExporter {
         resultCallback: (result: ExportResult) => void,
     ): void {
         for (const span of spans) {
+            console.dir(span.events, {
+                depth: null,
+            });
+
             const devToolsSpan = this.spanMapper.map(span);
 
             this.traceAssembler.addSpan(devToolsSpan);
@@ -28,9 +32,9 @@ export default class ServerDevToolsExporter implements SpanExporter {
 
             if (trace) {
                 this.traceStore.add(trace);
-                console.dir(this.traceStore.get(trace.traceId), {
-                    depth: null,
-                });
+                // console.dir(this.traceStore.get(trace.traceId), {
+                //     depth: null,
+                // });
             }
         }
 

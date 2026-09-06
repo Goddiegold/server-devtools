@@ -25,4 +25,9 @@ export interface IDevToolsSpan {
     code: number;
     message?: string;
   };
+  error?: {
+    type?: string;
+    message?: string;
+    stack?: string;
+  };
 }
