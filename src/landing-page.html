@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet" />
+    <style>
+        @layer base {
+
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                overscroll-behavior: none;
+            }
+
+            main>:first-child {
+                margin-top: 0 !important;
+            }
+
+            main>:last-child {
+                margin-bottom: 0 !important;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script
+        id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "primary-fixed": "#e5e1e4", "surface-container-low": "#f4f2fd", "on-tertiary-container": "#009668", "tertiary": "#000000", "on-tertiary-fixed-variant": "#005236", "on-error-container": "#93000a", "secondary-container": "#5bb8fe", "surface-bright": "#fbf8ff", "secondary-fixed": "#cce5ff", "tertiary-fixed-dim": "#4edea3", "on-surface": "#1a1b22", "on-secondary": "#ffffff", "error-container": "#ffdad6", "surface-container-lowest": "#ffffff", "secondary": "#006398", "outline-variant": "#c8c5ca", "surface-tint": "#5f5e60", "primary": "#000000", "surface-variant": "#e3e1ec", "on-secondary-container": "#00476e", "surface-container-highest": "#e3e1ec", "on-tertiary-fixed": "#002113", "primary-container": "#1c1b1d", "on-secondary-fixed": "#001d31", "background": "#fbf8ff", "tertiary-fixed": "#6ffbbe", "on-tertiary": "#ffffff", "outline": "#78767b", "primary-fixed-dim": "#c8c6c8", "on-surface-variant": "#47464a", "on-primary-container": "#858386", "surface": "#fbf8ff", "inverse-on-surface": "#f1effa", "tertiary-container": "#002113", "on-primary": "#ffffff", "on-secondary-fixed-variant": "#004b73", "on-primary-fixed": "#1c1b1d", "inverse-primary": "#c8c6c8", "error": "#ba1a1a", "surface-container-high": "#e8e7f1", "inverse-surface": "#2f3038", "on-primary-fixed-variant": "#474649", "on-error": "#ffffff", "surface-dim": "#dad9e3", "secondary-fixed-dim": "#93ccff", "surface-container": "#eeedf7", "on-background": "#1a1b22" }, "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" }, "spacing": { "space-2xl": "2rem", "space-xs": "0.25rem", "space-xl": "1.5rem", "sidebar-width": "15rem", "space-2xs": "0.125rem", "space-md": "0.5rem", "space-sm": "0.375rem", "space-lg": "1rem", "table-row-height": "2.25rem", "space-base": "0.75rem", "content-max-width": "80rem" }, "fontFamily": { "headline-lg": ["Geist"], "body-lg": ["Geist"], "body-md": ["Geist"], "code-lg": ["JetBrains Mono"], "body-sm": ["Geist"], "label-md": ["Geist"], "code-sm": ["JetBrains Mono"], "headline-xl": ["Geist"], "label-sm": ["Geist"], "code-md": ["JetBrains Mono"], "headline-xl-mobile": ["Geist"], "headline-md": ["Geist"] }, "fontSize": { "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "body-lg": ["15px", { "lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400" }], "body-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "400" }], "code-lg": ["13px", { "lineHeight": "20px", "letterSpacing": "-0.01em", "fontWeight": "400" }], "body-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0em", "fontWeight": "400" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0em", "fontWeight": "500" }], "code-sm": ["11px", { "lineHeight": "16px", "letterSpacing": "0em", "fontWeight": "400" }], "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.025em", "fontWeight": "600" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.01em", "fontWeight": "500" }], "code-md": ["12px", { "lineHeight": "18px", "letterSpacing": "-0.01em", "fontWeight": "400" }], "headline-xl-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "headline-md": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.015em", "fontWeight": "600" }] } } } };</script>
+</head>
+
+<body class="bg-surface font-body-md text-body-md text-on-surface">
+    <header
+        class="fixed top-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/40">
+        <div class="h-14 max-w-6xl mx-auto px-6 flex items-center justify-between">
+            <div class="flex items-center gap-3"><a class="flex items-center gap-2.5" data-path="home" href="#"><img
+                        alt="ServerDevTools Logo" class="h-8 w-auto object-contain"
+                        src="https://lh3.googleusercontent.com/aida/AEtjO1XfwH-n3oCB_OtOQ7WIB2EWr0b94t-K9eneudzFASe9P1Y4FR0AVri2qDubxwaD5K1yMYeBMf5f3_yu6B2CWiYhri0JDSpPcIR4rfSOmAc5QC-7XtSnpt8gyDtdc5wEe7NCW1YnPkSJFvaQSb2TgWpp6hxvKRYIAxLSF9ATO49lOWs9tVIx3nBFmFAKW9JEz3QiccSaat7QASlzs7AJ2nwAZ6Sa6NKxiVvXYarZgNeyoL1R8iKJQWTnQu1U" /><span
+                        class="font-headline-md text-headline-md text-on-surface tracking-tight font-semibold">ServerDevTools</span></a><span
+                    class="font-code-sm text-code-sm px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant border border-outline-variant/50">v0.4.2</span>
+            </div>
+            <div class="flex items-center gap-6">
+                <nav class="hidden md:flex items-center gap-6" data-active-classes="text-on-surface font-medium"><a
+                        class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors"
+                        data-path="documentation" href="#">Docs</a><a
+                        class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors"
+                        data-path="github" href="#">GitHub</a><a
+                        class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors"
+                        data-path="npm-package" href="#">npm</a></nav>
+                <div class="flex items-center gap-3"><a
+                        class="bg-primary text-on-primary font-label-md text-label-md px-3.5 py-1.5 rounded-lg hover:bg-primary-container transition-colors shadow-sm"
+                        data-path="get-started" href="#">Get Started</a>
+                    <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span
+                            class="material-symbols-outlined text-on-primary text-[18px]">person</span></div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <main class="w-full pt-14 bg-surface min-h-[calc(100vh-8rem)]">
+        <div class="flex flex-col w-full">
+            <!-- SECTION 1: HERO SECTION -->
+            <section class="relative w-full max-w-6xl mx-auto px-6 pt-12 pb-16 flex flex-col items-center text-center">
+                <!-- Ambient subtle illumination -->
+                <div
+                    class="absolute -top-10 left-1/2 -translate-x-1/2 w-[520px] h-[260px] bg-secondary-fixed/30 rounded-full blur-3xl pointer-events-none -z-10">
+                </div>
+                <!-- Status Badge -->
+                <div
+                    class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container text-on-surface-variant font-code-sm text-code-sm mb-6 shadow-sm">
+                    <span class="relative flex h-2 w-2">
+                        <span
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-on-tertiary-container opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-on-tertiary-container"></span>
+                    </span>
+                    <span>Open Source • Local & Embedded Debugging</span>
+                </div>
+                <!-- Primary Title -->
+                <h1
+                    class="font-headline-xl text-headline-xl sm:text-[54px] sm:leading-[1.1] text-on-surface max-w-4xl font-semibold tracking-tight">
+                    Debug your backend like you debug your browser.
+                </h1>
+                <!-- Supporting Narrative -->
+                <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mt-5 text-balance">
+                    Inspect requests, database queries, external API calls, errors, and timing from one live dashboard.
+                </p>
+                <!-- CTAs -->
+                <div class="flex flex-wrap items-center justify-center gap-3 mt-8">
+                    <a class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-container transition-colors shadow-sm"
+                        href="#code-sample">
+                        <span>Get Started</span>
+                        <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                    </a>
+                    <a class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-container-lowest text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm"
+                        data-path="github" href="#">
+                        <svg class="w-4 h-4 fill-current" viewbox="0 0 24 24">
+                            <path clip-rule="evenodd"
+                                d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                                fill-rule="evenodd"></path>
+                        </svg>
+                        <span>View on GitHub</span>
+                    </a>
+                </div>
+                <!-- Terminal Install Bar -->
+                <div class="mt-8 flex items-center gap-3 px-4 py-2 bg-surface-container-lowest rounded-lg shadow-sm">
+                    <span class="font-code-md text-code-md text-on-surface-variant select-none">$</span>
+                    <code class="font-code-md text-code-md text-on-surface tracking-tight"
+                        id="npm-cmd">npm install server-devtools</code>
+                    <button
+                        class="p-1 hover:bg-surface-container rounded transition-colors text-on-surface-variant hover:text-on-surface"
+                        onclick="navigator.clipboard.writeText('npm install server-devtools'); this.querySelector('span').innerText='done'; setTimeout(() => this.querySelector('span').innerText='content_copy', 1800);"
+                        title="Copy command">
+                        <span class="material-symbols-outlined text-[16px]">content_copy</span>
+                    </button>
+                </div>
+                <div class="mt-2.5 font-code-sm text-code-sm text-outline">
+                    Built for Node.js • Express • NestJS
+                </div>
+            </section>
+            <!-- SECTION 2: PRODUCT DASHBOARD PREVIEW (THE VISUAL CENTERPIECE) -->
+            <section class="w-full max-w-6xl mx-auto px-6 pb-24">
+                <div class="bg-surface-container-lowest rounded-xl shadow-xl overflow-hidden">
+                    <!-- Chrome Title Bar -->
+                    <div class="px-4 py-3 bg-surface-container flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-error inline-block"></span>
+                            <span class="w-3 h-3 rounded-full bg-secondary-container inline-block"></span>
+                            <span class="w-3 h-3 rounded-full bg-tertiary-fixed inline-block"></span>
+                            <span
+                                class="ml-2 font-code-sm text-code-sm text-on-surface-variant hidden sm:inline">localhost:3000/_devtools
+                                — ServerDevTools</span>
+                        </div>
+                        <div class="px-3 py-1 bg-surface-container-lowest rounded-md text-center shadow-xs">
+                            <span
+                                class="font-code-sm text-code-sm text-on-surface font-medium">http://localhost:3000/_devtools</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-high">
+                            <span class="w-2 h-2 rounded-full bg-on-tertiary-container animate-pulse"></span>
+                            <span class="font-code-sm text-code-sm text-on-tertiary-container font-medium">Recording (4
+                                requests)</span>
+                        </div>
+                    </div>
+                    <!-- Split Inspector Body -->
+                    <div class="flex flex-col lg:flex-row min-h-[460px] bg-surface-container-lowest">
+                        <!-- Left Pane: Network Log (~40%) -->
+                        <div class="w-full lg:w-5/12 bg-surface-container-low flex flex-col">
+                            <!-- Table Header -->
+                            <div
+                                class="grid grid-cols-12 px-3 py-2 bg-surface-container font-code-sm text-code-sm text-outline uppercase tracking-wider select-none font-medium">
+                                <span class="col-span-3">METHOD</span>
+                                <span class="col-span-4">PATH</span>
+                                <span class="col-span-2 text-center">STATUS</span>
+                                <span class="col-span-3 text-right">TIME</span>
+                            </div>
+                            <!-- Network Rows -->
+                            <div class="divide-y divide-surface-container flex-1">
+                                <!-- Row 1: Selected -->
+                                <div
+                                    class="grid grid-cols-12 px-3 py-2.5 bg-surface-container-lowest cursor-pointer font-code-md text-code-md items-center shadow-xs">
+                                    <span class="col-span-3 font-semibold text-secondary flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                        GET
+                                    </span>
+                                    <span class="col-span-4 font-medium text-on-surface truncate">/users/123</span>
+                                    <span class="col-span-2 text-center">
+                                        <span
+                                            class="inline-block px-1.5 py-0.2 rounded bg-tertiary-fixed/30 text-on-tertiary-fixed-variant font-code-sm text-code-sm font-medium">200</span>
+                                    </span>
+                                    <span
+                                        class="col-span-3 text-right text-on-surface-variant font-code-sm text-code-sm">462ms</span>
+                                </div>
+                                <!-- Row 2 -->
+                                <div
+                                    class="grid grid-cols-12 px-3 py-2.5 hover:bg-surface-container/50 cursor-pointer font-code-md text-code-md items-center">
+                                    <span
+                                        class="col-span-3 font-semibold text-tertiary-container flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-tertiary-container"></span>
+                                        POST
+                                    </span>
+                                    <span class="col-span-4 text-on-surface truncate">/orders</span>
+                                    <span class="col-span-2 text-center">
+                                        <span
+                                            class="inline-block px-1.5 py-0.2 rounded bg-tertiary-fixed/30 text-on-tertiary-fixed-variant font-code-sm text-code-sm font-medium">201</span>
+                                    </span>
+                                    <span
+                                        class="col-span-3 text-right text-on-surface-variant font-code-sm text-code-sm">731ms</span>
+                                </div>
+                                <!-- Row 3 -->
+                                <div
+                                    class="grid grid-cols-12 px-3 py-2.5 hover:bg-surface-container/50 cursor-pointer font-code-md text-code-md items-center">
+                                    <span class="col-span-3 font-semibold text-secondary flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                        GET
+                                    </span>
+                                    <span class="col-span-4 text-on-surface truncate">/products</span>
+                                    <span class="col-span-2 text-center">
+                                        <span
+                                            class="inline-block px-1.5 py-0.2 rounded bg-tertiary-fixed/30 text-on-tertiary-fixed-variant font-code-sm text-code-sm font-medium">200</span>
+                                    </span>
+                                    <span
+                                        class="col-span-3 text-right text-on-surface-variant font-code-sm text-code-sm">84ms</span>
+                                </div>
+                                <!-- Row 4 -->
+                                <div
+                                    class="grid grid-cols-12 px-3 py-2.5 hover:bg-surface-container/50 cursor-pointer font-code-md text-code-md items-center">
+                                    <span class="col-span-3 font-semibold text-error flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                                        POST
+                                    </span>
+                                    <span class="col-span-4 text-on-surface truncate">/checkout</span>
+                                    <span class="col-span-2 text-center">
+                                        <span
+                                            class="inline-block px-1.5 py-0.2 rounded bg-error-container text-on-error-container font-code-sm text-code-sm font-medium">500</span>
+                                    </span>
+                                    <span
+                                        class="col-span-3 text-right text-on-surface-variant font-code-sm text-code-sm">1.24s</span>
+                                </div>
+                            </div>
+                            <!-- Bottom Status Summary -->
+                            <div
+                                class="px-3 py-2 bg-surface-container font-code-sm text-code-sm text-outline flex justify-between items-center">
+                                <span>4 requests logged</span>
+                                <span>2.51s total timeline</span>
+                            </div>
+                        </div>
+                        <!-- Right Pane: Details & Execution (~60%) -->
+                        <div class="w-full lg:w-7/12 flex flex-col bg-surface-container-lowest">
+                            <!-- Detail Tabs -->
+                            <div
+                                class="flex items-center px-4 bg-surface-container-low font-label-md text-label-md gap-4">
+                                <button
+                                    class="py-2.5 text-on-surface-variant hover:text-on-surface transition-colors">Overview</button>
+                                <button class="py-2.5 text-on-surface font-semibold shadow-xs">Execution</button>
+                                <button
+                                    class="py-2.5 text-on-surface-variant hover:text-on-surface transition-colors">Request</button>
+                                <button
+                                    class="py-2.5 text-on-surface-variant hover:text-on-surface transition-colors">Response</button>
+                                <button
+                                    class="py-2.5 text-on-surface-variant hover:text-on-surface transition-colors">Error</button>
+                            </div>
+                            <!-- Execution Tree Canvas -->
+                            <div class="p-5 flex-1 flex flex-col justify-between">
+                                <div>
+                                    <!-- Lifecycle Header -->
+                                    <div class="flex items-center justify-between pb-3">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-headline-md text-headline-md text-on-surface">Execution
+                                                Lifecycle</span>
+                                            <span
+                                                class="font-code-sm text-code-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">462ms
+                                                total</span>
+                                        </div>
+                                        <span class="font-code-sm text-code-sm text-on-surface-variant">GET
+                                            /users/123</span>
+                                    </div>
+                                    <!-- Waterfall Tree Structure -->
+                                    <div class="mt-4 space-y-3 font-code-md text-code-md">
+                                        <!-- Root Request Node -->
+                                        <div class="flex flex-col gap-1.5 p-2 rounded-lg bg-surface-container-low">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <span
+                                                        class="material-symbols-outlined text-[16px] text-secondary">alt_route</span>
+                                                    <span class="font-semibold text-on-surface">GET /users/123</span>
+                                                </div>
+                                                <span
+                                                    class="font-code-sm text-code-sm font-semibold text-on-surface">462ms</span>
+                                            </div>
+                                            <!-- Timeline visual bar -->
+                                            <div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+                                                <div class="h-full bg-secondary rounded-full" style="width: 100%;">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Child 1: Middleware -->
+                                        <div class="pl-6 relative">
+                                            <div class="p-2 rounded bg-surface-container-low/70 flex flex-col gap-1">
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-2">
+                                                        <span
+                                                            class="material-symbols-outlined text-[15px] text-on-tertiary-container">shield</span>
+                                                        <span class="text-on-surface font-medium">middleware -
+                                                            authentication</span>
+                                                        <span
+                                                            class="px-1.5 py-0.2 rounded font-code-sm text-code-sm bg-tertiary-fixed text-on-tertiary-fixed">jwt</span>
+                                                    </div>
+                                                    <span class="font-code-sm text-code-sm text-on-surface-variant">2ms
+                                                        (0.4%)</span>
+                                                </div>
+                                                <div
+                                                    class="w-full h-1 bg-surface-container rounded-full overflow-hidden">
+                                                    <div class="h-full bg-on-tertiary-container" style="width: 1.5%;">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Child 2: Main Handler -->
+                                        <div class="pl-6 relative">
+                                            <div
+                                                class="p-2.5 rounded-lg bg-surface-container-low flex flex-col gap-2 shadow-xs">
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-2">
+                                                        <span
+                                                            class="material-symbols-outlined text-[15px] text-on-surface">code</span>
+                                                        <span class="text-on-surface font-medium">request handler -
+                                                            /users/:id</span>
+                                                    </div>
+                                                    <span
+                                                        class="font-code-sm text-code-sm text-on-surface-variant font-medium">458ms
+                                                        (99.1%)</span>
+                                                </div>
+                                                <div
+                                                    class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+                                                    <div class="h-full bg-primary" style="width: 99.1%;"></div>
+                                                </div>
+                                                <!-- Sub-handler calls -->
+                                                <div class="pl-4 mt-2 space-y-2">
+                                                    <!-- Sub 2.1 Database findOne -->
+                                                    <div
+                                                        class="p-2 bg-surface-container-lowest rounded flex flex-col gap-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center gap-2">
+                                                                <span
+                                                                    class="px-1.5 py-0.2 font-code-sm text-code-sm rounded bg-surface-container-high text-on-surface-variant font-medium">mongodb</span>
+                                                                <span
+                                                                    class="text-on-surface font-medium">users.findOne</span>
+                                                                <span class="font-code-sm text-code-sm text-outline">{
+                                                                    _id: "123" }</span>
+                                                            </div>
+                                                            <span
+                                                                class="font-code-sm text-code-sm text-on-tertiary-container font-semibold">12ms</span>
+                                                        </div>
+                                                        <div
+                                                            class="w-full h-1 bg-surface-container rounded-full overflow-hidden">
+                                                            <div class="h-full bg-on-tertiary-container"
+                                                                style="width: 4%;"></div>
+                                                        </div>
+                                                    </div>
+                                                    <!-- Sub 2.2 External HTTP Request -->
+                                                    <div
+                                                        class="p-2 bg-surface-container-lowest rounded flex flex-col gap-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center gap-2">
+                                                                <span
+                                                                    class="px-1.5 py-0.2 font-code-sm text-code-sm rounded bg-secondary-fixed text-on-secondary-fixed-variant font-medium">http-out</span>
+                                                                <span class="text-on-surface font-medium">GET
+                                                                    https://api.example.com</span>
+                                                                <span
+                                                                    class="font-code-sm text-code-sm text-on-tertiary-container font-medium">200
+                                                                    OK</span>
+                                                            </div>
+                                                            <span
+                                                                class="font-code-sm text-code-sm text-secondary font-semibold">421ms</span>
+                                                        </div>
+                                                        <div
+                                                            class="w-full h-1 bg-surface-container rounded-full overflow-hidden">
+                                                            <div class="h-full bg-secondary" style="width: 91%;"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Inspect Panel Footer Status -->
+                                <div
+                                    class="mt-4 pt-3 flex items-center justify-between font-code-sm text-code-sm text-outline">
+                                    <span class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[15px]">timer</span>
+                                        Breakdown: 2ms middleware • 12ms DB • 421ms remote API • 27ms Node event loop
+                                    </span>
+                                    <span class="text-on-surface-variant font-medium">Trace ID: #tr_891fa0e</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- SECTION 3: HOW IT WORKS -->
+            <section class="w-full max-w-6xl mx-auto px-6 py-20">
+                <div class="text-center max-w-2xl mx-auto mb-14">
+                    <span
+                        class="font-label-md text-label-md text-secondary font-medium tracking-wide uppercase">Workflow</span>
+                    <h2 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-1">
+                        From install to insight in minutes.
+                    </h2>
+                    <p class="font-body-lg text-body-lg text-on-surface-variant mt-3">
+                        No external agents, no complex cloud setup. Just one package in your repository.
+                    </p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Step 01 -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="font-code-sm text-code-sm text-secondary font-semibold">STEP 01</div>
+                            <h3 class="font-headline-md text-headline-md text-on-surface font-semibold mt-2">Install
+                                Package</h3>
+                            <p class="font-body-md text-body-md text-on-surface-variant mt-2">
+                                Save as a standard dependency in your existing Node.js application.
+                            </p>
+                        </div>
+                        <div class="mt-6 p-3 bg-surface-container rounded-lg font-code-sm text-code-sm text-on-surface">
+                            npm install server-devtools
+                        </div>
+                    </div>
+                    <!-- Step 02 -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="font-code-sm text-code-sm text-secondary font-semibold">STEP 02</div>
+                            <h3 class="font-headline-md text-headline-md text-on-surface font-semibold mt-2">Mount
+                                Runtime</h3>
+                            <p class="font-body-md text-body-md text-on-surface-variant mt-2">
+                                Add ServerDevTools to your Express or NestJS app with two lines of code.
+                            </p>
+                        </div>
+                        <div class="mt-6 p-3 bg-surface-container rounded-lg font-code-sm text-code-sm text-on-surface">
+                            await devtools.start(app);
+                        </div>
+                    </div>
+                    <!-- Step 03 -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="font-code-sm text-code-sm text-secondary font-semibold">STEP 03</div>
+                            <h3 class="font-headline-md text-headline-md text-on-surface font-semibold mt-2">Inspect
+                                Live</h3>
+                            <p class="font-body-md text-body-md text-on-surface-variant mt-2">
+                                Open the local dashboard and inspect requests in real-time as they process.
+                            </p>
+                        </div>
+                        <div class="mt-6 p-3 bg-surface-container rounded-lg font-code-sm text-code-sm text-on-surface">
+                            http://localhost:3000/_devtools
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- SECTION 4: FEATURES / WHAT YOU CAN INSPECT -->
+            <section class="w-full max-w-6xl mx-auto px-6 py-20">
+                <div class="max-w-2xl mb-12">
+                    <span
+                        class="font-label-md text-label-md text-secondary font-medium tracking-wide uppercase">Capabilities</span>
+                    <h2 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-1">
+                        Everything that happened during a request.
+                    </h2>
+                    <p class="font-body-lg text-body-lg text-on-surface-variant mt-2">
+                        Complete per-request telemetry without the overhead of enterprise observability.
+                    </p>
+                </div>
+                <!-- 6-item Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 1. Requests -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+                        <div
+                            class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-on-surface">
+                            <span class="material-symbols-outlined text-[20px]">swap_horiz</span>
+                        </div>
+                        <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Requests</h3>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            Inspect method, route, query parameters, headers, body, response payloads, status codes, and
+                            raw duration.
+                        </p>
+                    </div>
+                    <!-- 2. Execution -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+                        <div
+                            class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-on-surface">
+                            <span class="material-symbols-outlined text-[20px]">account_tree</span>
+                        </div>
+                        <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Execution</h3>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            See the complete request lifecycle as a hierarchical execution tree with nested middleware
+                            and handlers.
+                        </p>
+                    </div>
+                    <!-- 3. Database -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+                        <div
+                            class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-on-surface">
+                            <span class="material-symbols-outlined text-[20px]">database</span>
+                        </div>
+                        <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Database</h3>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            See database operations (Prisma, Mongoose, TypeORM, SQL) and exact query timing down to the
+                            millisecond.
+                        </p>
+                    </div>
+                    <!-- 4. External APIs -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+                        <div
+                            class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-on-surface">
+                            <span class="material-symbols-outlined text-[20px]">cloud_sync</span>
+                        </div>
+                        <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">External APIs</h3>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            See outgoing HTTP calls, remote endpoints, headers, status codes, payload summaries, and
+                            network latency.
+                        </p>
+                    </div>
+                    <!-- 5. Errors -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+                        <div
+                            class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-error">
+                            <span class="material-symbols-outlined text-[20px]">bug_report</span>
+                        </div>
+                        <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Errors</h3>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            Inspect uncaught exceptions, rejections, and full stack traces pinpointed to the exact
+                            request phase.
+                        </p>
+                    </div>
+                    <!-- 6. Timing -->
+                    <div class="p-6 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-3">
+                        <div
+                            class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-on-surface">
+                            <span class="material-symbols-outlined text-[20px]">schedule</span>
+                        </div>
+                        <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Timing</h3>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            Understand where request time was actually spent with granular waterfall breakdowns and
+                            event loop delays.
+                        </p>
+                    </div>
+                </div>
+            </section>
+            <!-- SECTION 5: CODE EXAMPLE -->
+            <section class="w-full max-w-6xl mx-auto px-6 py-20" id="code-sample">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+                    <div class="lg:col-span-5">
+                        <span
+                            class="font-label-md text-label-md text-secondary font-medium tracking-wide uppercase">Embedded
+                            Architecture</span>
+                        <h2 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight mt-1">
+                            Runs inside your application.
+                        </h2>
+                        <p class="font-body-lg text-body-lg text-on-surface-variant mt-4 leading-relaxed">
+                            ServerDevTools is an embedded module inside your backend runtime — not an external SaaS
+                            agent or separate database.
+                        </p>
+                        <div class="mt-8 space-y-4">
+                            <div class="flex items-start gap-3">
+                                <span
+                                    class="material-symbols-outlined text-on-tertiary-container text-[20px] mt-0.5">check_circle</span>
+                                <span class="font-body-md text-body-md text-on-surface">Zero cloud telemetry egress or
+                                    external data ingestion</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span
+                                    class="material-symbols-outlined text-on-tertiary-container text-[20px] mt-0.5">check_circle</span>
+                                <span class="font-body-md text-body-md text-on-surface">Auto-disabled in production via
+                                    environment flags</span>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span
+                                    class="material-symbols-outlined text-on-tertiary-container text-[20px] mt-0.5">check_circle</span>
+                                <span class="font-body-md text-body-md text-on-surface">Zero config async
+                                    instrumentation using AsyncLocalStorage</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-7">
+                        <div class="rounded-xl overflow-hidden shadow-xl bg-primary-container text-surface-bright">
+                            <div class="px-4 py-2.5 bg-surface-container-highest/10 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-outline"></span>
+                                    <span class="font-code-sm text-code-sm text-outline-variant">app.ts</span>
+                                </div>
+                                <button
+                                    class="font-code-sm text-code-sm text-outline-variant hover:text-surface-bright transition-colors"
+                                    onclick="navigator.clipboard.writeText(`import express from 'express';\nimport { ServerDevTools } from 'server-devtools';\n\nconst app = express();\nconst devtools = new ServerDevTools({\n  path: '/_devtools',\n  enabled: process.env.NODE_ENV !== 'production',\n});\n\nawait devtools.start(app);\n\napp.get('/users/:id', async (req, res) => {\n  const user = await db.users.findById(req.params.id);\n  res.json(user);\n});\n\napp.listen(3000);`); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy', 1800);">
+                                    Copy
+                                </button>
+                            </div>
+                            <div class="p-5 font-code-md text-code-md leading-relaxed overflow-x-auto">
+                                <pre><span class="text-secondary-fixed">import</span> express <span class="text-secondary-fixed">from</span> <span class="text-tertiary-fixed">"express"</span>;
+<span class="text-secondary-fixed">import</span> { ServerDevTools } <span class="text-secondary-fixed">from</span> <span class="text-tertiary-fixed">"server-devtools"</span>;
+
+<span class="text-secondary-fixed">const</span> app = express();
+<span class="text-secondary-fixed">const</span> devtools = <span class="text-secondary-fixed">new</span> ServerDevTools({
+  path: <span class="text-tertiary-fixed">"/_devtools"</span>,
+  enabled: process.env.NODE_ENV !== <span class="text-tertiary-fixed">"production"</span>,
+});
+
+<span class="text-secondary-fixed">await</span> devtools.start(app);
+
+<span class="text-outline">// Your normal routes</span>
+app.get(<span class="text-tertiary-fixed">"/users/:id"</span>, <span class="text-secondary-fixed">async</span> (req, res) => {
+  <span class="text-secondary-fixed">const</span> user = <span class="text-secondary-fixed">await</span> db.users.findById(req.params.id);
+  res.json(user);
+});
+
+app.listen(<span class="text-secondary-fixed">3000</span>);</pre>
+                            </div>
+                        </div>
+                        <!-- Simulated Preview Link Callout Box -->
+                        <div
+                            class="mt-4 p-4 rounded-xl bg-surface-container-lowest shadow-sm flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-secondary text-[22px]">link</span>
+                                <div>
+                                    <div class="font-label-md text-label-md text-on-surface font-semibold">Dashboard
+                                        mounted at:</div>
+                                    <a class="font-code-sm text-code-sm text-secondary hover:underline"
+                                        href="#">http://localhost:3000/_devtools</a>
+                                </div>
+                            </div>
+                            <span
+                                class="font-code-sm text-code-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">Live
+                                Preview</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- SECTION 6: POSITIONING / COMPARISON -->
+            <section class="w-full max-w-6xl mx-auto px-6 py-20">
+                <div class="text-center max-w-3xl mx-auto mb-14">
+                    <h2 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight">
+                        Stop digging through logs.
+                    </h2>
+                    <p class="font-body-lg text-body-lg text-on-surface-variant mt-3 text-balance">
+                        When something goes wrong, see the request, execution path, database operations, external calls,
+                        timing and error together.
+                    </p>
+                </div>
+                <!-- Side-by-Side Comparison -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Without -->
+                    <div class="p-8 rounded-xl bg-error-container/20 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-6">
+                                <span class="material-symbols-outlined text-error text-[22px]">cancel</span>
+                                <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">Without
+                                    ServerDevTools</h3>
+                            </div>
+                            <ul class="space-y-4 font-body-md text-body-md text-on-surface-variant">
+                                <li class="flex items-center gap-3">
+                                    <span class="text-error font-bold">×</span>
+                                    <span>console.log(...) everywhere across codebase</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-error font-bold">×</span>
+                                    <span>Grep and search through noisy terminal stdout</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-error font-bold">×</span>
+                                    <span>Add more log statements to isolate the bug</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-error font-bold">×</span>
+                                    <span>Restart local server and lose runtime state</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-error font-bold">×</span>
+                                    <span>Reproduce the request manually via curl or Postman</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-error font-bold">×</span>
+                                    <span>Search logs again trying to correlate timestamps</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="mt-8 pt-4 font-code-sm text-code-sm text-error font-medium">
+                            Result: 15-30 minutes wasted per bug
+                        </div>
+                    </div>
+                    <!-- With -->
+                    <div class="p-8 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-6">
+                                <span
+                                    class="material-symbols-outlined text-on-tertiary-container text-[22px]">check_circle</span>
+                                <h3 class="font-headline-md text-headline-md text-on-surface font-semibold">With
+                                    ServerDevTools</h3>
+                            </div>
+                            <ul class="space-y-4 font-body-md text-body-md text-on-surface">
+                                <li class="flex items-center gap-3">
+                                    <span class="text-on-tertiary-container font-bold">✓</span>
+                                    <span>Open <code
+                                            class="px-1.5 py-0.5 rounded bg-surface-container font-code-sm text-code-sm">/_devtools</code>
+                                        in your browser</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-on-tertiary-container font-bold">✓</span>
+                                    <span>Select the failed request directly from the network log</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-on-tertiary-container font-bold">✓</span>
+                                    <span>Inspect exact execution tree, query breakdown & error trace</span>
+                                </li>
+                                <li class="flex items-center gap-3">
+                                    <span class="text-on-tertiary-container font-bold">✓</span>
+                                    <span>Fix the bug immediately with complete context</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="mt-8 pt-4 font-code-sm text-code-sm text-on-tertiary-container font-medium">
+                            Result: Zero console spam • Resolved in seconds
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- SECTION 7: FINAL CTA -->
+            <section class="w-full max-w-4xl mx-auto px-6 py-24 text-center">
+                <div class="p-10 rounded-2xl bg-surface-container-lowest shadow-xl flex flex-col items-center">
+                    <h2 class="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight max-w-xl">
+                        See what your backend is actually doing.
+                    </h2>
+                    <p class="font-body-lg text-body-lg text-on-surface-variant mt-3 max-w-lg">
+                        Free and open-source under the MIT license. Install it in seconds.
+                    </p>
+                    <!-- Terminal command box -->
+                    <div class="mt-8 flex items-center gap-3 px-4 py-2.5 bg-surface-container rounded-lg shadow-inner">
+                        <span class="font-code-md text-code-md text-on-surface-variant select-none">$</span>
+                        <code
+                            class="font-code-md text-code-md text-on-surface font-medium">npm install server-devtools</code>
+                        <button
+                            class="p-1 hover:bg-surface-container-highest/40 rounded transition-colors text-on-surface-variant hover:text-on-surface"
+                            onclick="navigator.clipboard.writeText('npm install server-devtools'); this.querySelector('span').innerText='done'; setTimeout(() => this.querySelector('span').innerText='content_copy', 1800);"
+                            title="Copy command">
+                            <span class="material-symbols-outlined text-[16px]">content_copy</span>
+                        </button>
+                    </div>
+                    <!-- Final Actions -->
+                    <div class="flex flex-wrap items-center justify-center gap-4 mt-8">
+                        <a class="px-6 py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-container transition-colors shadow-sm"
+                            href="#code-sample">
+                            Get Started
+                        </a>
+                        <a class="px-6 py-2.5 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md hover:bg-surface-container-high transition-colors shadow-sm"
+                            data-path="github" href="#">
+                            View on GitHub
+                        </a>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    <footer class="w-full bg-surface-container-lowest border-t border-outline-variant/40 py-10">
+        <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex flex-col gap-1 items-center md:items-start">
+                <div class="flex items-center gap-2"><span
+                        class="font-headline-md text-headline-md text-on-surface font-semibold tracking-tight">ServerDevTools</span><span
+                        class="font-code-sm text-code-sm text-on-surface-variant/80 border border-outline-variant/40 px-1.5 py-0.5 rounded">MIT</span>
+                </div>
+                <p class="font-body-sm text-body-sm text-on-surface-variant">An open-source developer inspection tool
+                    for Node.js</p>
+            </div>
+            <div class="flex items-center gap-6 font-body-md text-body-md text-on-surface-variant"><a
+                    class="hover:text-on-surface transition-colors" data-path="github" href="#">GitHub</a><a
+                    class="hover:text-on-surface transition-colors" data-path="documentation"
+                    href="#">Documentation</a><a class="hover:text-on-surface transition-colors" data-path="npm-package"
+                    href="#">npm</a><a class="hover:text-on-surface transition-colors" data-path="license" href="#">MIT
+                    License</a></div>
+        </div>
+    </footer>
+</body>
+
+</html>
