@@ -9,9 +9,11 @@ async function bootstrap() {
   // the application.
   await devtools.start();
 
-  const { default: express } = await import("express");
+  // const { default: express } = await import("express");
+  const express = require("express");
   const app = express();
 
+  app.use(express.json());
   // ServerDevTools runs on the SAME Express server.
   // app.use("/_devtools", (req, res) => {
   //     devtools.handle(req, res);
@@ -39,6 +41,12 @@ async function bootstrap() {
       name: "John Doe",
     });
   });
+
+  app.post("/users", (req, res) => {
+    res.json({
+        received: req.body,
+    });
+});
 
   const PORT = 3000;
 

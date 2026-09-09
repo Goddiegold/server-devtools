@@ -5,7 +5,7 @@ import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import ServerDevToolsExporter from "./exporter";
 import TraceAssembler from "../core/trace-assembler";
 import TraceStore from "../core/trace-store";
-import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
+import { ExpressInstrumentation, ExpressLayerType } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
 
 
@@ -28,10 +28,25 @@ export class Instrumentation {
                         ignoreIncomingRequestHook: (request) => {
                             return request.url?.split('?')[0].startsWith("/_devtools") ?? false;
                         },
+                        headersToSpanAttributes: {
+                            server: {
+                                requestHeaders: [
+                                    "content-type",
+                                    "user-agent",
+                                ],
+                            },
+                        },
                     }
                 ),
                 new UndiciInstrumentation(),
-                new ExpressInstrumentation(),
+                // new ExpressInstrumentation(),
+                new ExpressInstrumentation({
+                    requestHook: (_span, info) => {
+                        if (info.layerType === ExpressLayerType.REQUEST_HANDLER) {
+                            console.log("DEVTOOLS REQUEST BODY:", info.request.body);
+                        }
+                    },
+                }),
                 new MongoDBInstrumentation({
                     enhancedDatabaseReporting: false,
                 }),
