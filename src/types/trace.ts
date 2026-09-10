@@ -9,3 +9,12 @@ export interface IDevToolsTrace {
   startedAt: number;
   durationMs?: number;
 }
+export interface ITraceMetadata {
+    request?: {
+        body?: unknown;
+    };
+
+    response?: {
+        body?: unknown;
+    };
+}

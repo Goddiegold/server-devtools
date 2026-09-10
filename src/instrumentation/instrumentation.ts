@@ -7,11 +7,13 @@ import TraceAssembler from "../core/trace-assembler";
 import TraceStore from "../core/trace-store";
 import { ExpressInstrumentation, ExpressLayerType } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
+import TraceMetadataStore from "../core/trace-metadata-store";
 
 
 export class Instrumentation {
     private readonly oTelSdk: NodeSDK;
     readonly traceStore: TraceStore;
+    readonly traceMetadataStore: TraceMetadataStore;
 
     constructor() {
         const traceAssembler = new TraceAssembler();
@@ -41,10 +43,21 @@ export class Instrumentation {
                 new UndiciInstrumentation(),
                 // new ExpressInstrumentation(),
                 new ExpressInstrumentation({
-                    requestHook: (_span, info) => {
+                    requestHook: (span, info) => {
                         if (info.layerType === ExpressLayerType.REQUEST_HANDLER) {
                             console.log("DEVTOOLS REQUEST BODY:", info.request.body);
                         }
+
+                        if (info.request.body === undefined) {
+                            return;
+                        }
+
+                        const traceId = span.spanContext().traceId;
+
+                        traceMetadataStore.setRequestBody(
+                            traceId,
+                            info.request.body,
+                        );
                     },
                 }),
                 new MongoDBInstrumentation({
@@ -52,6 +65,10 @@ export class Instrumentation {
                 }),
             ],
         });
+
+        const traceMetadataStore = new TraceMetadataStore();
+
+        this.traceMetadataStore = traceMetadataStore;
     }
 
     async start() {
