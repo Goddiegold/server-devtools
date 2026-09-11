@@ -4,6 +4,7 @@ import TraceStore from "../core/trace-store";
 import DashboardRequestMapper from './dashboard-request-mapper';
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
+import TraceMetadataStore from "../core/trace-metadata-store";
 
 
 export default class DashboardServer {
@@ -15,6 +16,7 @@ export default class DashboardServer {
 
     constructor(
         private readonly traceStore: TraceStore,
+        private readonly traceMetadataStore: TraceMetadataStore,
     ) {
     }
 
@@ -74,7 +76,8 @@ export default class DashboardServer {
                 return;
             }
 
-            const request = this.requestDetailMapper.map(trace);
+            const metadata = this.traceMetadataStore.get(traceId)
+            const request = this.requestDetailMapper.map(trace, metadata);
 
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");

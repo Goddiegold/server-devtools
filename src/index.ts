@@ -11,7 +11,7 @@ class ServerDevTools {
 
     constructor() {
         this.instrumentation = new Instrumentation();
-        this.dashboard = new DashboardServer(this.instrumentation.traceStore);
+        this.dashboard = new DashboardServer(this.instrumentation.traceStore,   this.instrumentation.traceMetadataStore,);
     }
 
     async start(){

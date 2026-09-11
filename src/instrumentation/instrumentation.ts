@@ -58,6 +58,11 @@ export class Instrumentation {
                             traceId,
                             info.request.body,
                         );
+
+                        console.log(
+                            "TRACE METADATA:",
+                            traceMetadataStore.get(traceId),
+                        );
                     },
                 }),
                 new MongoDBInstrumentation({
