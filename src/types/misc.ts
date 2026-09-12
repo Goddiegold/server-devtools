@@ -12,7 +12,7 @@ export interface IDevToolsRequest {
 }
 
 export interface IServerDevlToolsParams {
-    encryption: {
+    encryption?: {
         key: string,
         fields?: string[]
     }

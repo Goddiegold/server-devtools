@@ -2,14 +2,12 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 
 import DashboardServer from '../src/dashboard/dashboard-server';
-import TraceMetadataStore from '../src/core/trace-metadata-store';
 import SQLiteStorage from '../src/storage/sqlite-storage';
 import { IDevToolsTrace } from '../src/types';
 
 async function run() {
   // 1. Create the in-memory SQLite storage
   const storage = new SQLiteStorage(':memory:');
-  const traceMetadataStore = new TraceMetadataStore();
 
   // 2. Put one fake HTTP request trace inside it
   const trace: IDevToolsTrace = {
@@ -44,7 +42,7 @@ async function run() {
   storage.saveTraceSummary(trace.spans[0]);
 
   // 3. Start ServerDevTools' HTTP server
-  const dashboard = new DashboardServer(traceMetadataStore, storage);
+  const dashboard = new DashboardServer(storage);
 
   const server = http.createServer((req, res) => {
     dashboard.handle(req, res);

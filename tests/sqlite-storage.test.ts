@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
+import { unlinkSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 
 import SQLiteStorage from "../src/storage/sqlite-storage";
+import EncryptDecryptService from "../src/security/encrypt-decrypt.service";
+
+/**
+ * Basic SQLite storage tests
+ */
 
 const storage = new SQLiteStorage(":memory:");
 
-
 // Save root span
-
 storage.saveSpan({
     traceId: "trace-1",
     spanId: "span-1",
@@ -22,50 +27,23 @@ storage.saveSpan({
     },
 });
 
-
 // Verify single-span read
+const spans = storage.getSpansByTraceId("trace-1");
 
-const spans = storage.getSpansByTraceId(
-    "trace-1"
-);
+assert.equal(spans.length, 1);
+assert.equal(spans[0].spanId, "span-1");
+assert.equal(spans[0].traceId, "trace-1");
+assert.equal(spans[0].type, "http.server");
 
-assert.equal(
-    spans.length,
-    1
-);
+assert.deepEqual(spans[0].attributes, {
+    "http.request.method": "POST",
+});
 
-assert.equal(
-    spans[0].spanId,
-    "span-1"
-);
-
-assert.equal(
-    spans[0].traceId,
-    "trace-1"
-);
-
-assert.equal(
-    spans[0].type,
-    "http.server"
-);
-
-assert.deepEqual(
-    spans[0].attributes,
-    {
-        "http.request.method": "POST",
-    }
-);
-
-assert.deepEqual(
-    spans[0].status,
-    {
-        code: 0,
-    }
-);
-
+assert.deepEqual(spans[0].status, {
+    code: 0,
+});
 
 // Add child span
-
 storage.saveSpan({
     traceId: "trace-1",
     spanId: "span-2",
@@ -82,56 +60,24 @@ storage.saveSpan({
     },
 });
 
-
 // Verify complete trace reconstruction
-
-const trace = storage.getTrace(
-    "trace-1"
-);
+const trace = storage.getTrace("trace-1");
 
 assert.ok(trace);
-
-assert.equal(
-    trace.traceId,
-    "trace-1"
-);
-
-assert.equal(
-    trace.rootSpanId,
-    "span-1"
-);
-
-assert.equal(
-    trace.spans.length,
-    2
-);
-
-assert.equal(
-    trace.spans[0].spanId,
-    "span-1"
-);
-
-assert.equal(
-    trace.spans[1].spanId,
-    "span-2"
-);
-
-assert.equal(
-    trace.durationMs,
-    42
-);
-
+assert.equal(trace.traceId, "trace-1");
+assert.equal(trace.rootSpanId, "span-1");
+assert.equal(trace.spans.length, 2);
+assert.equal(trace.spans[0].spanId, "span-1");
+assert.equal(trace.spans[1].spanId, "span-2");
+assert.equal(trace.durationMs, 42);
 
 // Verify missing trace
-
 assert.equal(
     storage.getTrace("does-not-exist"),
-    undefined
+    undefined,
 );
 
-
 // Save trace summary
-
 storage.saveTraceSummary({
     traceId: "trace-1",
     spanId: "span-1",
@@ -150,37 +96,204 @@ storage.saveTraceSummary({
     },
 });
 
-
 // Verify trace summaries
+const summaries = storage.getTraceSummaries();
 
-const summaries =
-    storage.getTraceSummaries();
+assert.equal(summaries.length, 1);
 
+assert.deepEqual(summaries[0], {
+    traceId: "trace-1",
+    rootSpanId: "span-1",
+    startedAt: 1000,
+    durationMs: 42,
+    method: "POST",
+    path: "/users",
+    route: "/users",
+    statusCode: 201,
+    hasError: false,
+});
+
+// Save request metadata
+storage.saveRequestBody("trace-1", {
+    email: "john@example.com",
+    password: "secret",
+});
+
+// Save response metadata
+storage.saveResponseBody("trace-1", {
+    id: 123,
+    success: true,
+});
+
+// Read metadata back
+const metadata = storage.getTraceMetadata("trace-1");
+
+assert.deepEqual(metadata, {
+    request: {
+        body: {
+            email: "john@example.com",
+            password: "secret",
+        },
+    },
+    response: {
+        body: {
+            id: 123,
+            success: true,
+        },
+    },
+});
+
+// Missing metadata
 assert.equal(
-    summaries.length,
-    1
+    storage.getTraceMetadata("missing-trace"),
+    undefined,
 );
-
-assert.deepEqual(
-    summaries[0],
-    {
-        traceId: "trace-1",
-        rootSpanId: "span-1",
-        startedAt: 1000,
-        durationMs: 42,
-        method: "POST",
-        path: "/users",
-        route: "/users",
-        statusCode: 201,
-        hasError: false,
-    }
-);
-
-
-// Close database
 
 storage.close();
 
-console.log(
-    "sqlite storage tests passed"
+/**
+ * Encryption-at-rest tests
+ */
+
+const encryptionKey = Buffer
+    .from("12345678901234567890123456789012")
+    .toString("base64");
+
+const encryptionService = new EncryptDecryptService(
+    encryptionKey,
+    [
+        "password",
+        "accessToken",
+        "authorization",
+    ],
 );
+
+const encryptedDbPath =
+    "./server-devtools-encryption-test.db";
+
+// Ensure an old failed test run cannot pollute this test
+try {
+    unlinkSync(encryptedDbPath);
+} catch {
+    // File does not exist
+}
+
+const encryptedStorage = new SQLiteStorage(
+    encryptedDbPath,
+    encryptionService,
+);
+
+const requestBody = {
+    email: "john@example.com",
+    password: "super-secret",
+    profile: {
+        name: "John",
+        accessToken: "abc-123",
+    },
+};
+
+const responseBody = {
+    success: true,
+    authorization: "Bearer secret-token",
+};
+
+encryptedStorage.saveRequestBody(
+    "encrypted-trace",
+    requestBody,
+);
+
+encryptedStorage.saveResponseBody(
+    "encrypted-trace",
+    responseBody,
+);
+
+/**
+ * Public read should decrypt everything back to
+ * its original representation.
+ */
+const encryptedMetadata =
+    encryptedStorage.getTraceMetadata(
+        "encrypted-trace",
+    );
+
+assert.deepEqual(encryptedMetadata, {
+    request: {
+        body: requestBody,
+    },
+    response: {
+        body: responseBody,
+    },
+});
+
+encryptedStorage.close();
+
+/**
+ * Inspect SQLite directly.
+ *
+ * Sensitive values must NOT exist in plaintext
+ * inside the persisted JSON.
+ */
+const rawDb = new DatabaseSync(encryptedDbPath);
+
+const rawRow = rawDb.prepare(`
+    SELECT
+        request_body,
+        response_body
+    FROM trace_metadata
+    WHERE trace_id = ?
+`).get("encrypted-trace") as {
+    request_body: string;
+    response_body: string;
+} | undefined;
+
+assert.ok(rawRow);
+
+// Sensitive request values should not be plaintext
+assert.equal(
+    rawRow.request_body.includes("super-secret"),
+    false,
+);
+
+assert.equal(
+    rawRow.request_body.includes("abc-123"),
+    false,
+);
+
+// Sensitive response value should not be plaintext
+assert.equal(
+    rawRow.response_body.includes(
+        "Bearer secret-token",
+    ),
+    false,
+);
+
+// Non-sensitive values should remain readable
+assert.equal(
+    rawRow.request_body.includes(
+        "john@example.com",
+    ),
+    true,
+);
+
+assert.equal(
+    rawRow.request_body.includes("John"),
+    true,
+);
+
+// Verify our encrypted format actually exists on disk
+assert.equal(
+    rawRow.request_body.includes("sdt:v1:"),
+    true,
+);
+
+assert.equal(
+    rawRow.response_body.includes("sdt:v1:"),
+    true,
+);
+
+rawDb.close();
+
+// Clean up temporary database
+unlinkSync(encryptedDbPath);
+
+console.log("sqlite storage tests passed");

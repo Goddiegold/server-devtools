@@ -4,7 +4,11 @@ import { Express } from "express";
 import ServerDevTools from "../../src";
 
 async function bootstrap() {
-  const devtools = new ServerDevTools();
+  const devtools = new ServerDevTools({
+    encryption: {
+      key: "K2I3QiRWSThQR2JWUHNbRXAmRXcuJChteVBCMDhCRTE="
+    }
+  });
 
   // Start OpenTelemetry instrumentation BEFORE loading/starting
   // the application.

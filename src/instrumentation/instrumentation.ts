@@ -5,17 +5,14 @@ import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import ServerDevToolsExporter from "./exporter";
 import { ExpressInstrumentation, ExpressLayerType } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
-import TraceMetadataStore from "../core/trace-metadata-store";
 import SQLiteStorage from "../storage/sqlite-storage";
 
 
 export class Instrumentation {
     private readonly oTelSdk: NodeSDK;
-    readonly traceMetadataStore: TraceMetadataStore;
-    readonly storage =
-        new SQLiteStorage("./server-devtools.db");
-
-    constructor() {
+    constructor(
+      private readonly  storage: SQLiteStorage
+    ) {
         this.oTelSdk = new NodeSDK({
             spanProcessors: [
                 new SimpleSpanProcessor(new ServerDevToolsExporter(this.storage)),
@@ -54,15 +51,9 @@ export class Instrumentation {
 
                         const traceId = span.spanContext().traceId;
 
-                        traceMetadataStore.setRequestBody(
-                            traceId,
-                            info.request.body,
-                        );
 
-                        console.log(
-                            "TRACE METADATA:",
-                            traceMetadataStore.get(traceId),
-                        );
+                        this.storage.saveRequestBody(traceId, info.request.body)
+
                     },
                 }),
                 new MongoDBInstrumentation({
@@ -71,9 +62,6 @@ export class Instrumentation {
             ],
         });
 
-        const traceMetadataStore = new TraceMetadataStore();
-
-        this.traceMetadataStore = traceMetadataStore;
     }
 
     async start() {

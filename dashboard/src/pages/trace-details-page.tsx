@@ -129,14 +129,16 @@ function ResponseDetails({ response }: { response: ITraceResponse }) {
   const contentType = Object.entries(response.headers ?? {}).find(
     ([key]) => key.toLowerCase() === "content-type"
   )?.[1]
-  const body = response.body ?? ""
-  let formattedBody = body
+  let formattedBody = formatValue(response.body ?? "")
 
-  if (contentType?.some((value) => value.toLowerCase().includes("json"))) {
+  if (
+    typeof response.body === "string" &&
+    contentType?.some((value) => value.toLowerCase().includes("json"))
+  ) {
     try {
-      formattedBody = JSON.stringify(JSON.parse(body), null, 2)
+      formattedBody = JSON.stringify(JSON.parse(response.body), null, 2)
     } catch {
-      formattedBody = body
+      formattedBody = response.body
     }
   }
 

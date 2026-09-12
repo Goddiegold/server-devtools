@@ -1,23 +1,37 @@
 // import { Instrumentation } from "./instumentations/instrumentation";
 
+import { context, trace } from "@opentelemetry/api";
 import { IncomingMessage, ServerResponse } from "node:http";
 import DashboardServer from "./dashboard/dashboard-server";
 import { Instrumentation } from "./instrumentation/instrumentation";
-import { context, trace } from "@opentelemetry/api";
 import { IServerDevlToolsParams } from "./types";
-import config from "./config";
+import SQLiteStorage from "./storage/sqlite-storage";
+import EncryptDecryptService from "./security/encrypt-decrypt.service";
+import Config from "./config";
 
 class ServerDevTools {
     private instrumentation: Instrumentation;
     private dashboard: DashboardServer;
+    private storage: SQLiteStorage
 
     constructor(
-        // { encryption: { key, fields = config.DEFAULT_FIELDS_TO_ENCRYPT } }: IServerDevlToolsParams
+        options: IServerDevlToolsParams = {}
     ) {
-        this.instrumentation = new Instrumentation();
+        const encryptionService = options.encryption
+            ? new EncryptDecryptService(
+                options.encryption.key,
+                options.encryption.fields || Config.DEFAULT_FIELDS_TO_ENCRYPT,
+            )
+            : undefined;
+
+        this.storage = new SQLiteStorage(
+            "./server-devtools.db",
+            encryptionService,
+        );
+
+        this.instrumentation = new Instrumentation(this.storage);
         this.dashboard = new DashboardServer(
-            this.instrumentation.traceMetadataStore,
-            this.instrumentation.storage
+            this.storage
         );
     }
 
@@ -47,8 +61,7 @@ class ServerDevTools {
 
         console.log("ACTIVE TRACE ID:", traceId);
 
-        const traceMetadataStore =
-            this.instrumentation.traceMetadataStore;
+        const storage = this.storage
 
         const originalWriteFunc = res.write;
 
@@ -97,7 +110,21 @@ class ServerDevTools {
                 chunks.push(chunk)
             }
 
-            traceMetadataStore.setResponseBody(traceId, chunks.join(""))
+
+            const rawBody = chunks.join("");
+
+            const contentType = res.getHeader("content-type");
+            let body = rawBody
+
+            if (typeof contentType === 'string' && contentType.includes("application/json")) {
+                try {
+                    body = JSON.parse(rawBody);
+                } catch (e) {
+
+                }
+            }
+
+            storage.saveResponseBody(traceId, body)
             return originalEndFunc.apply(this, args);
         };
 

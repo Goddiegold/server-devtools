@@ -1,10 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
-import { IDevToolsSpan, IDevToolsTrace, ITraceSummary } from "../types";
+import { IDevToolsSpan, IDevToolsTrace, ITraceMetadata, ITraceSummary } from "../types";
+import EncryptDecryptService from "../security/encrypt-decrypt.service";
 
 export default class SQLiteStorage {
     private readonly db: DatabaseSync;
 
-    constructor(path: string) {
+    constructor(path: string,
+        private readonly encryptionService?: EncryptDecryptService,
+    ) {
         this.db = new DatabaseSync(path);
 
         this.initialize();
@@ -28,19 +31,27 @@ export default class SQLiteStorage {
         CREATE INDEX IF NOT EXISTS idx_spans_trace_id
         ON spans(trace_id);
 
+        CREATE TABLE IF NOT EXISTS traces (
+            trace_id TEXT PRIMARY KEY,
+            root_span_id TEXT,
+            started_at INTEGER NOT NULL,
+            duration_ms REAL,
+            method TEXT,
+            path TEXT,
+            route TEXT,
+            status_code INTEGER,
+            has_error INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        );
 
-       CREATE TABLE IF NOT EXISTS traces (
-    trace_id TEXT PRIMARY KEY,
-    root_span_id TEXT,
-    started_at INTEGER NOT NULL,
-    duration_ms REAL,
-    method TEXT,
-    path TEXT,
-    route TEXT,
-    status_code INTEGER,
-    has_error INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL
-);
+        CREATE INDEX IF NOT EXISTS idx_traces_started_at
+        ON traces(started_at);
+
+        CREATE TABLE IF NOT EXISTS trace_metadata (
+            trace_id TEXT PRIMARY KEY,
+            request_body TEXT,
+            response_body TEXT
+        );
     `);
     }
 
@@ -228,6 +239,93 @@ export default class SQLiteStorage {
             statusCode: row.status_code ?? undefined,
             hasError: row.has_error === 1,
         }));
+    }
+
+    saveRequestBody(traceId: string, body: unknown): void {
+        const statement = this.db.prepare(`
+        INSERT INTO trace_metadata (
+            trace_id,
+            request_body
+        )
+        VALUES (?, ?)
+        ON CONFLICT(trace_id) DO UPDATE SET
+            request_body = excluded.request_body
+    `);
+
+        const data = this.encryptionService
+            ? this.encryptionService.encryptData(body)
+            : body;
+
+        statement.run(
+            traceId,
+            JSON.stringify(data),
+        );
+    }
+
+    saveResponseBody(traceId: string, body: unknown): void {
+        const statement = this.db.prepare(`
+        INSERT INTO trace_metadata (
+            trace_id,
+            response_body
+        )
+        VALUES (?, ?)
+        ON CONFLICT(trace_id) DO UPDATE SET
+            response_body = excluded.response_body
+    `);
+
+        const data = this.encryptionService
+            ? this.encryptionService.encryptData(body)
+            : body;
+
+        statement.run(
+            traceId,
+            JSON.stringify(data),
+        );
+    }
+
+    getTraceMetadata(traceId: string): ITraceMetadata | undefined {
+        const statement = this.db.prepare(`
+        SELECT
+            request_body,
+            response_body
+        FROM trace_metadata
+        WHERE trace_id = ?
+    `);
+
+        const row = statement.get(traceId) as {
+            request_body: string | null;
+            response_body: string | null;
+        } | undefined;
+
+        if (!row) {
+            return undefined;
+        }
+
+        const requestBody = row.request_body !== null
+            ? JSON.parse(row.request_body)
+            : undefined;
+
+        const responseBody = row.response_body !== null
+            ? JSON.parse(row.response_body)
+            : undefined;
+
+        return {
+            request: requestBody !== undefined
+                ? {
+                    body: this.encryptionService
+                        ? this.encryptionService.decryptData(requestBody)
+                        : requestBody,
+                }
+                : undefined,
+
+            response: responseBody !== undefined
+                ? {
+                    body: this.encryptionService
+                        ? this.encryptionService.decryptData(responseBody)
+                        : responseBody,
+                }
+                : undefined,
+        };
     }
 
     close(): void {

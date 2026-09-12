@@ -1,11 +1,10 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
-import TraceMetadataStore from "../core/trace-metadata-store";
+import SQLiteStorage from "../storage/sqlite-storage";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
-import SQLiteStorage from "../storage/sqlite-storage";
 
 
 export default class DashboardServer {
@@ -17,7 +16,6 @@ export default class DashboardServer {
 
 
     constructor(
-        private readonly traceMetadataStore: TraceMetadataStore,
         private readonly storage: SQLiteStorage,
     ) {
     }
@@ -79,7 +77,7 @@ export default class DashboardServer {
                 return;
             }
 
-            const metadata = this.traceMetadataStore.get(traceId)
+            const metadata = this.storage.getTraceMetadata(traceId)
             const request = this.requestDetailMapper.map(trace, metadata);
 
             res.statusCode = 200;
@@ -110,7 +108,7 @@ export default class DashboardServer {
                 return;
             }
 
-            const metadata = this.traceMetadataStore.get(traceId)
+         const metadata = this.storage.getTraceMetadata(traceId)
             const response = this.responseDetailMapper.map(trace, metadata)
 
             res.statusCode = 200;
