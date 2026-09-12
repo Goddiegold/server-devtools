@@ -16,6 +16,13 @@ export default class DashboardResponseDetailMapper {
         //     rootSpanAttributes: rootSpan.attributes['http.server']
         // })
 
+        // console.log("DashboardResponseDetailMapper...START")
+        // console.dir(rootSpan?.attributes, {
+        //     depth: null,
+        // });
+        // console.log("DashboardResponseDetailMapper...END")
+    
+        
         // find http.server root span
         // map status
         // map response headers

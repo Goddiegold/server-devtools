@@ -27,4 +27,4 @@ curl -i -X POST http://localhost:3000/users \
 curl -X GET  http://localhost:3000/_devtools/api/requests                               
 
 curl http://localhost:3000/_devtools/api/traces/26661409fdd661d5c23d7833e9d60dac/request
-curl http://localhost:3000/_devtools/api/traces/6831bb9367790b12ca06bb8ae93a0088/response
+curl http://localhost:3000/_devtools/api/traces/8ebaa0da889ab53d39ecf87fa22f2e26/response

@@ -36,6 +36,10 @@ export class Instrumentation {
                                     "content-type",
                                     "user-agent",
                                 ],
+                                responseHeaders: [
+                                    "content-type",
+                                    "user-agent",
+                                ]
                             },
                         },
                     }
