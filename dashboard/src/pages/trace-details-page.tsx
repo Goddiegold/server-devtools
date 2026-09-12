@@ -5,6 +5,8 @@ import {
   getTrace,
   getTraceRequest,
   getTraceResponse,
+  getTraceErrors,
+  type ITraceError,
   type ITraceRequest,
   type ITraceResponse,
 } from "@/api/traces"
@@ -164,6 +166,40 @@ function ResponseDetails({ response }: { response: ITraceResponse }) {
   )
 }
 
+function ErrorDetails({ errors }: { errors: ITraceError[] }) {
+  if (errors.length === 0) {
+    return <p className="text-sm text-muted-foreground">No errors captured for this request.</p>
+  }
+
+  return (
+    <div className="space-y-4">
+      {errors.map((capturedError, index) => (
+        <article key={`${capturedError.spanId ?? "error"}-${index}`} className="rounded-md border p-3">
+          <p className="font-mono text-sm font-semibold text-destructive">
+            {capturedError.message ?? "Unknown error"}
+          </p>
+          <div className="mt-3">
+            <KeyValueRows
+              values={Object.fromEntries(
+                ([
+                  ["Type", capturedError.type],
+                  ["Origin", capturedError.spanName],
+                  ["Span Type", capturedError.spanType],
+                ] as const).filter(([, value]) => value !== undefined && value !== "")
+              )}
+            />
+          </div>
+          {capturedError.stack && (
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/30 p-3 font-mono text-xs">
+              {capturedError.stack}
+            </pre>
+          )}
+        </article>
+      ))}
+    </div>
+  )
+}
+
 export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
   const [trace, setTrace] = useState<IDevToolsTrace | null>(null)
   const [loading, setLoading] = useState(true)
@@ -178,6 +214,9 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
   const [response, setResponse] = useState<ITraceResponse | null>(null)
   const [responseLoading, setResponseLoading] = useState(false)
   const [responseError, setResponseError] = useState<string | null>(null)
+  const [capturedErrors, setCapturedErrors] = useState<ITraceError[] | null>(null)
+  const [capturedErrorsLoading, setCapturedErrorsLoading] = useState(false)
+  const [capturedErrorsError, setCapturedErrorsError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -191,6 +230,8 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
       setRequestError(null)
       setResponse(null)
       setResponseError(null)
+      setCapturedErrors(null)
+      setCapturedErrorsError(null)
       setActiveTab("Overview")
 
       try {
@@ -320,6 +361,39 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
     }
   }, [activeTab, response, traceId])
 
+  useEffect(() => {
+    if (activeTab !== "Error" || capturedErrors !== null) {
+      return
+    }
+
+    let active = true
+
+    void getTraceErrors(traceId)
+      .then((data) => {
+        if (active) {
+          setCapturedErrors(data)
+        }
+      })
+      .catch((errorsFetchError) => {
+        if (active) {
+          setCapturedErrorsError(
+            errorsFetchError instanceof Error
+              ? errorsFetchError.message
+              : "Failed to load error data"
+          )
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setCapturedErrorsLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [activeTab, capturedErrors, traceId])
+
   const span = trace ? rootHttpSpan(trace) : undefined
   const method = attributeString(span, "http.request.method") ?? "UNKNOWN"
   const path = attributeString(span, "url.path") ?? "Unknown path"
@@ -390,6 +464,10 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
                     setResponseLoading(true)
                     setResponseError(null)
                   }
+                  if (tab === "Error" && capturedErrors === null) {
+                    setCapturedErrorsLoading(true)
+                    setCapturedErrorsError(null)
+                  }
                   setActiveTab(tab)
                 }}
               >
@@ -435,6 +513,17 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
               {responseLoading && <p className="text-sm text-muted-foreground">Loading response data...</p>}
               {!responseLoading && responseError && <p className="text-sm text-destructive">{responseError}</p>}
               {!responseLoading && !responseError && response && <ResponseDetails response={response} />}
+            </section>
+          ) : activeTab === "Error" ? (
+            <section className="mt-6 rounded-md border p-4">
+              <h2 className="mb-3 text-sm font-semibold">Error</h2>
+              {capturedErrorsLoading && <p className="text-sm text-muted-foreground">Loading error data...</p>}
+              {!capturedErrorsLoading && capturedErrorsError && (
+                <p className="text-sm text-destructive">{capturedErrorsError}</p>
+              )}
+              {!capturedErrorsLoading && !capturedErrorsError && capturedErrors && (
+                <ErrorDetails errors={capturedErrors} />
+              )}
             </section>
           ) : (
             <section className="mt-6 rounded-md border p-4">

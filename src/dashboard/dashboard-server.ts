@@ -1,10 +1,11 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import Config from "../config";
-import TraceStore from "../core/trace-store";
-import DashboardRequestMapper from './dashboard-request-mapper';
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
-import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import TraceMetadataStore from "../core/trace-metadata-store";
+import TraceStore from "../core/trace-store";
+import DashboardErrorMapper from "./dashboard-errors-mapper";
+import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
+import DashboardRequestMapper from './dashboard-request-mapper';
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
 
 
@@ -13,6 +14,7 @@ export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
     private readonly responseDetailMapper = new DashboardResponseDetailMapper()
+    private readonly errorMapper = new DashboardErrorMapper()
     // private server?: Server;
 
 
@@ -118,6 +120,38 @@ export default class DashboardServer {
             return;
 
         }
+
+        if (
+            req.method === Config.REQUEST_METHOD.GET &&
+            req.url?.startsWith(`${Config.DASHBOARD_API_ROUTES.TRACES}/`) &&
+            req.url.endsWith("/errors")
+        ) {
+
+            const prefix = `${Config.DASHBOARD_API_ROUTES.TRACES}/`;
+
+            const traceId = req.url
+                .slice(prefix.length)
+                .replace(/\/errors$/, "");
+
+            const trace = this.traceStore.get(traceId);
+
+            if (!trace) {
+                res.statusCode = 404;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Trace not found",
+                }));
+                return;
+            }
+
+            const errors = this.errorMapper.map(trace)
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify(errors));
+            return;
+
+        }
+
 
         if (
             req.method === Config.REQUEST_METHOD.GET &&

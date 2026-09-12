@@ -22,3 +22,15 @@ export interface IDevToolsResponse {
   headers: Record<string, string | string[]>;
   body?: unknown;
 }
+
+export interface IDevToolsError {
+    spanId: string;
+    spanName: string;
+    spanType: SpanType;
+
+    type?: string;
+    message?: string;
+    stack?: string;
+
+    startedAt: number;
+}

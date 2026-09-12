@@ -4,7 +4,7 @@ curl http://localhost:3434/hello
 
 npx tsx --import ./src/register.ts ./examples/express/server.ts
 
- NODE_OPTIONS="--experimental-loader=@opentelemetry/instrumentation/hook.mjs" \
+NODE_OPTIONS="--experimental-loader=@opentelemetry/instrumentation/hook.mjs" \
 node --import ./dist/src/register.js ./dist/examples/express/server.js
 
 NODE_OPTIONS="--experimental-loader=@opentelemetry/instrumentation/hook.mjs" \
@@ -28,3 +28,6 @@ curl -X GET  http://localhost:3000/_devtools/api/requests
 
 curl http://localhost:3000/_devtools/api/traces/26661409fdd661d5c23d7833e9d60dac/request
 curl http://localhost:3000/_devtools/api/traces/8ebaa0da889ab53d39ecf87fa22f2e26/response
+curl http://localhost:3000//_devtools/api/traces/8c80d2434e70a046f77af66b88e0ee63/errors
+
+curl -i http://localhost:3000/error-test

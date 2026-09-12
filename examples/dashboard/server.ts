@@ -63,6 +63,10 @@ async function bootstrap() {
     res.end("ServerDevTools");
   });
 
+  app.get("/error-test", () => {
+    throw new Error("ServerDevTools test error");
+  });
+
   const PORT = 3000;
 
   app.listen(PORT, () => {
