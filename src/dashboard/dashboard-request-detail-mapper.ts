@@ -4,7 +4,7 @@ import { IDevToolsTrace, ITraceMetadata } from "../types";
 
 export default class DashboardRequestDetailMapper {
 
-    map(trace: IDevToolsTrace,    metadata?: ITraceMetadata,) {
+    map(trace: IDevToolsTrace, metadata?: ITraceMetadata,) {
         const rootSpan = trace.spans.find(span => span.spanId === trace.rootSpanId && span.type === 'http.server');
 
         if (!rootSpan) {
@@ -28,6 +28,7 @@ export default class DashboardRequestDetailMapper {
                 rootSpan.attributes["url.path"]
             ),
             body: metadata?.request?.body,
+            // response: metadata?.response?.body || null
         }
     }
 

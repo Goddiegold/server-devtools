@@ -16,3 +16,9 @@ export interface IDashboardRequest {
 
   hasError: boolean;
 }
+
+export interface IDevToolsResponse {
+  statusCode?: number;
+  headers: Record<string, string | string[]>;
+  body?: unknown;
+}

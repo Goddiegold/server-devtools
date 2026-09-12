@@ -1,5 +1,6 @@
 // import express from "express";
 
+import { Express } from "express";
 import ServerDevTools from "../../src";
 
 async function bootstrap() {
@@ -11,7 +12,7 @@ async function bootstrap() {
 
   // const { default: express } = await import("express");
   const express = require("express");
-  const app = express();
+  const app = express() as Express;
 
   app.use(express.json());
   // ServerDevTools runs on the SAME Express server.
@@ -20,14 +21,16 @@ async function bootstrap() {
   // });
 
   app.use((req, res, next) => {
-    if (req.url.startsWith("/_devtools")) {
-      console.log({
-        method: req.method,
-        url: req.url,
-      });
-      devtools.handle(req, res);
-      return;
-    }
+    devtools.middleware(req, res)
+
+    // if (req.url.startsWith("/_devtools")) {
+    //   console.log({
+    //     method: req.method,
+    //     url: req.url,
+    //   });
+    //   devtools.handle(req, res);
+    //   return;
+    // }
 
     next();
   });
@@ -43,10 +46,22 @@ async function bootstrap() {
   });
 
   app.post("/users", (req, res) => {
-    res.json({
+    res
+      .status(201)
+      .set({
+        "X-Test-Header": "server-devtools",
+        "X-Request-Source": "users-api",
+      })
+      .json({
         received: req.body,
-    });
-});
+      });
+  });
+
+  app.get("/stream-test", (_req, res) => {
+    res.write("Hello ");
+    res.write("from ");
+    res.end("ServerDevTools");
+  });
 
   const PORT = 3000;
 
