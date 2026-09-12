@@ -2,15 +2,13 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
 import TraceMetadataStore from "../core/trace-metadata-store";
-import TraceStore from "../core/trace-store";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
-import DashboardRequestMapper from './dashboard-request-mapper';
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
+import SQLiteStorage from "../storage/sqlite-storage";
 
 
 export default class DashboardServer {
-    private readonly requestMapper = new DashboardRequestMapper();
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
     private readonly responseDetailMapper = new DashboardResponseDetailMapper()
@@ -19,8 +17,8 @@ export default class DashboardServer {
 
 
     constructor(
-        private readonly traceStore: TraceStore,
         private readonly traceMetadataStore: TraceMetadataStore,
+        private readonly storage: SQLiteStorage,
     ) {
     }
 
@@ -40,7 +38,8 @@ export default class DashboardServer {
                 .replace(/\/execution$/, "");
 
 
-            const trace = this.traceStore.get(traceId);
+            //  const trace = this.storage.getTrace(traceId)
+            const trace = this.storage.getTrace(traceId)
 
             if (!trace) {
                 res.statusCode = 404;
@@ -70,7 +69,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/request$/, "");
 
-            const trace = this.traceStore.get(traceId);
+             const trace = this.storage.getTrace(traceId)
             if (!trace) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
@@ -101,7 +100,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/response$/, "");
 
-            const trace = this.traceStore.get(traceId);
+             const trace = this.storage.getTrace(traceId)
             if (!trace) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
@@ -133,7 +132,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/errors$/, "");
 
-            const trace = this.traceStore.get(traceId);
+             const trace = this.storage.getTrace(traceId)
 
             if (!trace) {
                 res.statusCode = 404;
@@ -161,7 +160,7 @@ export default class DashboardServer {
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
 
-            const trace = this.traceStore.get(traceId);
+             const trace = this.storage.getTrace(traceId)
 
             if (!trace) {
                 res.statusCode = 404;
@@ -181,7 +180,18 @@ export default class DashboardServer {
         if (
             req.method === Config.REQUEST_METHOD.GET &&
             pathname === Config.DASHBOARD_API_ROUTES.REQUESTS) {
-            const requests = this.traceStore.getAll().map(trace => this.requestMapper.map(trace));
+            const requests = this.storage
+                .getTraceSummaries()
+                .map(summary => ({
+                    id: summary.traceId,
+                    method: summary.method ?? "UNKNOWN",
+                    path: summary.path ?? "",
+                    route: summary.route,
+                    statusCode: summary.statusCode,
+                    durationMs: summary.durationMs,
+                    startedAt: summary.startedAt,
+                    hasError: summary.hasError,
+                }));
 
             res.statusCode = 200
             res.setHeader('Content-Type', 'application/json');

@@ -5,16 +5,14 @@ import assert from 'node:assert/strict';
 import { SpanKind } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 
-import  ServerDevToolsExporter  from '../src/instrumentation/exporter';
-import  TraceAssembler from '../src/core/trace-assembler';
-import  TraceStore from '../src/core/trace-store';
+import ServerDevToolsExporter from '../src/instrumentation/exporter';
+import SQLiteStorage from '../src/storage/sqlite-storage';
 
-const assembler = new TraceAssembler();
-const store = new TraceStore();
+const storage = new SQLiteStorage(":memory:");
+
 
 const exporter = new ServerDevToolsExporter(
-  assembler,
-  store,
+  storage
 );
 
 const span = {
@@ -44,13 +42,15 @@ const span = {
   },
 } as unknown as ReadableSpan;
 
-exporter.export([span], () => {});
+exporter.export([span], () => { });
 
-const trace = store.get('trace-123');
+const trace = storage.getTrace('trace-123');
 
 assert.ok(trace);
 assert.equal(trace.traceId, 'trace-123');
 assert.equal(trace.rootSpanId, 'span-123');
 assert.equal(trace.spans.length, 1);
+
+storage.close();
 
 console.log('Exporter pipeline test passed');

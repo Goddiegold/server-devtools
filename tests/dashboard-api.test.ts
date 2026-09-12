@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 
-import TraceStore from '../src/core/trace-store';
 import DashboardServer from '../src/dashboard/dashboard-server';
+import TraceMetadataStore from '../src/core/trace-metadata-store';
+import SQLiteStorage from '../src/storage/sqlite-storage';
 import { IDevToolsTrace } from '../src/types';
 
 async function run() {
-  // 1. Create our in-memory trace store
-  const traceStore = new TraceStore();
+  // 1. Create the in-memory SQLite storage
+  const storage = new SQLiteStorage(':memory:');
+  const traceMetadataStore = new TraceMetadataStore();
 
   // 2. Put one fake HTTP request trace inside it
-  traceStore.add({
+  const trace: IDevToolsTrace = {
     traceId: 'trace-123',
     rootSpanId: 'root-span',
     startedAt: 1000,
@@ -37,10 +39,12 @@ async function run() {
         },
       },
     ],
-  });
+  };
+  for (const span of trace.spans) storage.saveSpan(span);
+  storage.saveTraceSummary(trace.spans[0]);
 
   // 3. Start ServerDevTools' HTTP server
-  const dashboard = new DashboardServer(traceStore);
+  const dashboard = new DashboardServer(traceMetadataStore, storage);
 
   const server = http.createServer((req, res) => {
     dashboard.handle(req, res);
@@ -83,7 +87,10 @@ async function run() {
     );
 
     assert.equal(traceResponse.status, 200);
-    assert.deepEqual(await traceResponse.json(), traceStore.get('trace-123'));
+    assert.deepEqual(
+      await traceResponse.json(),
+      JSON.parse(JSON.stringify(storage.getTrace('trace-123'))),
+    );
 
     const missingTraceResponse = await fetch(
       `http://127.0.0.1:${address.port}/_devtools/api/traces/missing`,
@@ -127,7 +134,8 @@ async function run() {
         },
       ],
     };
-    traceStore.add(executionTrace);
+    for (const span of executionTrace.spans) storage.saveSpan(span);
+    storage.saveTraceSummary(executionTrace.spans[0]);
 
     const executionResponse = await fetch(
       `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-execution/execution`
@@ -164,6 +172,7 @@ async function run() {
         else resolve();
       });
     });
+    storage.close();
   }
 }
 

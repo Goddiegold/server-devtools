@@ -11,14 +11,18 @@ class ServerDevTools {
     private instrumentation: Instrumentation;
     private dashboard: DashboardServer;
 
-    constructor({ encryption: { key, fields = config.DEFAULT_FIELDS_TO_ENCRYPT } }: IServerDevlToolsParams) {
+    constructor(
+        // { encryption: { key, fields = config.DEFAULT_FIELDS_TO_ENCRYPT } }: IServerDevlToolsParams
+    ) {
         this.instrumentation = new Instrumentation();
-        this.dashboard = new DashboardServer(this.instrumentation.traceStore, this.instrumentation.traceMetadataStore,);
+        this.dashboard = new DashboardServer(
+            this.instrumentation.traceMetadataStore,
+            this.instrumentation.storage
+        );
     }
 
     async start() {
         await this.instrumentation.start();
-        // await this.dashboard.start(3001);
     }
 
     handle(req: IncomingMessage, res: ServerResponse) {
@@ -101,7 +105,6 @@ class ServerDevTools {
     }
 
     async shutdown() {
-        // await this.dashboard.stop();
         await this.instrumentation.shutdown();
     }
 

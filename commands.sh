@@ -31,4 +31,6 @@ curl http://localhost:3000/_devtools/api/traces/8ebaa0da889ab53d39ecf87fa22f2e26
 curl http://localhost:3000//_devtools/api/traces/8c80d2434e70a046f77af66b88e0ee63/errors
 
 curl -i http://localhost:3000/error-test
+curl http://localhost:3000/users/123    
 SERVER_DEVTOOLS_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+rm server-devtools.db
