@@ -3,12 +3,19 @@ export default {
     DASHBOARD_API_ROUTES: {
         TRACES: '/_devtools/api/traces',
         REQUESTS: '/_devtools/api/requests',
-    }, 
-    REQUEST_METHOD:{
+    },
+    REQUEST_METHOD: {
         GET: 'GET',
         POST: 'POST',
         PUT: 'PUT',
         DELETE: 'DELETE',
         PATCH: 'PATCH',
-    }
+    },
+    DEFAULT_FIELDS_TO_ENCRYPT: [
+        "password",
+        "accessToken",
+        "refreshToken",
+        "authorization",
+        "cookie",
+    ],
 }

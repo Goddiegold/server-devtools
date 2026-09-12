@@ -4,13 +4,14 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import DashboardServer from "./dashboard/dashboard-server";
 import { Instrumentation } from "./instrumentation/instrumentation";
 import { context, trace } from "@opentelemetry/api";
-
+import { IServerDevlToolsParams } from "./types";
+import config from "./config";
 
 class ServerDevTools {
     private instrumentation: Instrumentation;
     private dashboard: DashboardServer;
 
-    constructor() {
+    constructor({ encryption: { key, fields = config.DEFAULT_FIELDS_TO_ENCRYPT } }: IServerDevlToolsParams) {
         this.instrumentation = new Instrumentation();
         this.dashboard = new DashboardServer(this.instrumentation.traceStore, this.instrumentation.traceMetadataStore,);
     }

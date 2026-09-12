@@ -10,3 +10,10 @@ export interface IDevToolsRequest {
 
     body?: unknown;
 }
+
+export interface IServerDevlToolsParams {
+    encryption: {
+        key: string,
+        fields?: string[]
+    }
+}
