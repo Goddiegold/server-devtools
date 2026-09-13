@@ -1,3 +1,4 @@
+import { IDevToolsSpanType } from "./span";
 
 export interface IDashboardRequest {
   id: string;
@@ -24,13 +25,20 @@ export interface IDevToolsResponse {
 }
 
 export interface IDevToolsError {
-    spanId: string;
-    spanName: string;
-    spanType: SpanType;
+  spanId: string;
+  spanName: string;
+  spanType: IDevToolsSpanType;
 
-    type?: string;
-    message?: string;
-    stack?: string;
+  type?: string;
+  message?: string;
+  stack?: string;
 
-    startedAt: number;
+  startedAt: number;
+}
+
+export interface ISession {
+    sessionHash: string;
+    username: string;
+    createdAt: number;
+    expiresAt: number;
 }

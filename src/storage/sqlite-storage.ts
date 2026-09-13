@@ -1,7 +1,14 @@
 import { DatabaseSync } from "node:sqlite";
-import { IDevToolsSpan, IDevToolsTrace, ITraceMetadata, ITraceSummary } from "../types";
+import { IDevToolsSpan, IDevToolsTrace, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 
+
+interface ISessionRow {
+    session_hash: string;
+    username: string;
+    created_at: number;
+    expires_at: number;
+}
 export default class SQLiteStorage {
     private readonly db: DatabaseSync;
 
@@ -52,6 +59,13 @@ export default class SQLiteStorage {
             request_body TEXT,
             response_body TEXT
         );
+
+       CREATE TABLE IF NOT EXISTS sessions (
+           session_hash TEXT PRIMARY KEY,
+           username TEXT NOT NULL,
+           created_at INTEGER NOT NULL,
+           expires_at INTEGER NOT NULL
+       );
     `);
     }
 
@@ -377,7 +391,7 @@ export default class SQLiteStorage {
             this.db.exec("COMMIT");
         } catch (error) {
             this.db.exec("ROLLBACK");
-            throw error;
+            ç
         }
     }
 
@@ -396,6 +410,51 @@ export default class SQLiteStorage {
             this.db.exec("ROLLBACK");
             throw error;
         }
+    }
+
+    saveSession(session: ISession): void {
+        this.db.prepare(`
+        INSERT INTO sessions (
+            session_hash,
+            username,
+            created_at,
+            expires_at
+        )
+        VALUES (?, ?, ?, ?)
+    `).run(
+            session.sessionHash,
+            session.username,
+            session.createdAt,
+            session.expiresAt,
+        );
+    }
+
+    getSessionByHash(sessionHash: string): ISession | undefined {
+        const row = this.db.prepare(`
+        SELECT
+            session_hash,
+            username,
+            created_at,
+            expires_at
+        FROM sessions
+        WHERE session_hash = ?
+    `).get(sessionHash) as ISessionRow | undefined;
+
+        if (!row) return undefined;
+
+        return {
+            sessionHash: row.session_hash,
+            username: row.username,
+            createdAt: row.created_at,
+            expiresAt: row.expires_at,
+        };
+    }
+
+    deleteSession(sessionHash: string) {
+        this.db.prepare(`
+            DELETE FROM sessions
+            WHERE session_hash = ?
+        `).run(sessionHash);
     }
 
     close(): void {

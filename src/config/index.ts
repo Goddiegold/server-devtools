@@ -3,6 +3,7 @@ export default {
     DASHBOARD_API_ROUTES: {
         TRACES: '/_devtools/api/traces',
         REQUESTS: '/_devtools/api/requests',
+        AUTH: '/devtools/api/auth'
     },
     REQUEST_METHOD: {
         GET: 'GET',

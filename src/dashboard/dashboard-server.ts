@@ -5,6 +5,7 @@ import SQLiteStorage from "../storage/sqlite-storage";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
+import AuthService from "../security/auth.service";
 
 
 export default class DashboardServer {
@@ -17,6 +18,7 @@ export default class DashboardServer {
 
     constructor(
         private readonly storage: SQLiteStorage,
+        private readonly authService: AuthService
     ) {
     }
 

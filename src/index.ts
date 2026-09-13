@@ -8,19 +8,21 @@ import { IServerDevlToolsParams } from "./types";
 import SQLiteStorage from "./storage/sqlite-storage";
 import EncryptDecryptService from "./security/encrypt-decrypt.service";
 import Config from "./config";
+import AuthService from "./security/auth.service";
 
 class ServerDevTools {
     private instrumentation: Instrumentation;
     private dashboard: DashboardServer;
     private storage: SQLiteStorage
+    private authService: AuthService
 
     constructor(
-        options: IServerDevlToolsParams = {}
+        options: IServerDevlToolsParams
     ) {
         const encryptionService = options.encryption
             ? new EncryptDecryptService(
                 options.encryption.key,
-                options.encryption.fields || Config.DEFAULT_FIELDS_TO_ENCRYPT,
+                options.encryption.fields ?? Config.DEFAULT_FIELDS_TO_ENCRYPT,
             )
             : undefined;
 
@@ -29,9 +31,20 @@ class ServerDevTools {
             encryptionService,
         );
 
+        const auth = options.auth || {}
+
+        if (!auth?.username || !auth?.password) {
+            throw new Error(
+                "ServerDevTools auth username and password are required",
+            );
+        }
+
+        this.authService = new AuthService(auth.username, auth.password, this.storage)
+
         this.instrumentation = new Instrumentation(this.storage);
         this.dashboard = new DashboardServer(
-            this.storage
+            this.storage,
+            this.authService
         );
     }
 

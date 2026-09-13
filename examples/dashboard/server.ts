@@ -7,6 +7,10 @@ async function bootstrap() {
   const devtools = new ServerDevTools({
     encryption: {
       key: "K2I3QiRWSThQR2JWUHNbRXAmRXcuJChteVBCMDhCRTE="
+    }, 
+    auth:{
+      username:"godwin", 
+      password:"12345678"
     }
   });
 

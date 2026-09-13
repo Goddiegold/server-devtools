@@ -15,5 +15,9 @@ export interface IServerDevlToolsParams {
     encryption?: {
         key: string,
         fields?: string[]
+    },
+    auth: {
+        password: string,
+        username: string
     }
 }

@@ -1,6 +1,6 @@
 
 
-export type DevToolsSpanType =
+export type IDevToolsSpanType =
   | 'http.server'
   | 'http.client'
   | 'database'
@@ -12,7 +12,7 @@ export interface IDevToolsSpan {
   spanId: string;
   parentSpanId?: string;
 
-  type: DevToolsSpanType;
+  type: IDevToolsSpanType;
 
   name: string;
 
