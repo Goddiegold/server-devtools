@@ -6,6 +6,7 @@ import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
 import AuthService from "../security/auth.service";
+import { ISession } from "../types";
 
 
 export default class DashboardServer {
@@ -63,6 +64,38 @@ export default class DashboardServer {
         }
 
         return undefined;
+    }
+
+    private authenticateRequest(
+        req: IncomingMessage,
+        res: ServerResponse,
+    ): ISession | undefined {
+        const token = this.getCookie(req, "sdt_session");
+
+        if (!token) {
+            this.sendUnauthorized(res);
+            return undefined;
+        }
+
+        const session = this.authService.getSession(token);
+
+        if (!session) {
+            this.sendUnauthorized(res);
+            return undefined;
+        }
+
+        return session;
+    }
+
+    private sendUnauthorized(res: ServerResponse): void {
+        res.statusCode = 401;
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+
+        res.end(JSON.stringify({
+            message: "Unauthorized",
+        }));
+        return;
     }
 
     private async handleLogin(req: IncomingMessage,
@@ -149,17 +182,27 @@ export default class DashboardServer {
         const pathname = requestUrl.split('?')[0];
 
         if (
-            req.method === "GET" &&
-            pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/profile`
-        ) {
-            return this.handleProfile(req, res);
-        }
-
-        if (
             req.method === "POST" &&
             pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/login`
         ) {
             return this.handleLogin(req, res);
+        }
+
+
+        // Everything under /_devtools/api from here requires auth
+        if (pathname.startsWith("/_devtools/api/")) {
+            const session = this.authenticateRequest(req, res);
+
+            if (!session) {
+                return;
+            }
+        }
+
+        if (
+            req.method === "GET" &&
+            pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/profile`
+        ) {
+            return this.handleProfile(req, res);
         }
 
         if (
