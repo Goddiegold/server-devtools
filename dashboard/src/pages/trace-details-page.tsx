@@ -495,6 +495,9 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                   </p>
                 )}
                 <p className="mt-1 font-mono text-sm text-muted-foreground">
+                  Started At: {new Date(trace.startedAt).toLocaleString()}
+                </p>
+                <p className="mt-1 font-mono text-sm text-muted-foreground">
                   Duration: {trace.durationMs ?? span?.durationMs ?? "—"}ms
                 </p>
               </div>

@@ -138,6 +138,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
               <th className="px-4 py-3 font-medium">METHOD</th>
               <th className="px-4 py-3 font-medium">PATH</th>
               <th className="px-4 py-3 font-medium">STATUS</th>
+              <th className="px-4 py-3 font-medium">STARTED AT</th>
               <th className="px-4 py-3 text-right font-medium">DURATION</th>
               <th className="w-12 px-4 py-3" />
             </tr>
@@ -161,6 +162,9 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                 <td className="px-4 py-3 font-mono">{request.path}</td>
                 <td className="px-4 py-3 font-mono">
                   {request.statusCode ?? "—"}
+                </td>
+                <td className="px-4 py-3 font-mono whitespace-nowrap">
+                  {new Date(request.startedAt).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right font-mono">
                   {request.durationMs !== undefined
