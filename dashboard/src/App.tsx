@@ -104,6 +104,11 @@ function App() {
     navigate(REQUESTS_PATH)
   }
 
+  function handleLogout() {
+    setAuthState("unauthenticated")
+    navigate(LOGIN_PATH)
+  }
+
   if (authState === "checking") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
@@ -118,7 +123,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {route.kind !== "login" && <DashboardHeader />}
+      {route.kind !== "login" && <DashboardHeader onLogout={handleLogout} />}
 
       {route.kind === "requests" && (
         <RequestsPage onSelectRequest={selectRequest} />

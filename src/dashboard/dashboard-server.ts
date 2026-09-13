@@ -141,6 +141,29 @@ export default class DashboardServer {
         return;
     }
 
+    private handleLogout(
+        req: IncomingMessage,
+        res: ServerResponse,
+    ): void {
+        const token = this.getCookie(req, "sdt_session");
+
+        if (token) {
+            this.authService.deleteSession(token);
+        }
+
+        res.setHeader(
+            "Set-Cookie",
+            "sdt_session=; HttpOnly; SameSite=Strict; Path=/_devtools; Max-Age=0",
+        );
+
+        res.setHeader("Cache-Control", "no-store");
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({
+            message: "Logout Successfully!",
+        }));
+    }
+
     private handleProfile(
         req: IncomingMessage,
         res: ServerResponse,
@@ -196,6 +219,13 @@ export default class DashboardServer {
             if (!session) {
                 return;
             }
+        }
+
+        if (
+            req.method === "POST" &&
+            pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/logout`
+        ) {
+            return this.handleLogout(req, res);
         }
 
         if (
