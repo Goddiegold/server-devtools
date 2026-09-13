@@ -30,8 +30,10 @@ export default class DashboardServer {
             pathname === Config.DASHBOARD_API_ROUTES.TRACES
         ) {
             this.storage.clearHistory();
-            res.statusCode = 204;
-            res.end();
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                message: "Cleared history successfully!",
+            }));
             return;
         }
 
@@ -42,16 +44,21 @@ export default class DashboardServer {
             const traceId = decodeURIComponent(pathname.slice(
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
-
             if (!this.storage.getTrace(traceId)) {
                 res.statusCode = 404;
-                res.end();
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Trace not found",
+                }));
                 return;
             }
 
             this.storage.deleteTrace(traceId);
-            res.statusCode = 204;
-            res.end();
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                message: "Deleted successfully!",
+            }));
             return;
         }
 
@@ -97,7 +104,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/request$/, "");
 
-             const trace = this.storage.getTrace(traceId)
+            const trace = this.storage.getTrace(traceId)
             if (!trace) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
@@ -128,7 +135,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/response$/, "");
 
-             const trace = this.storage.getTrace(traceId)
+            const trace = this.storage.getTrace(traceId)
             if (!trace) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
@@ -138,7 +145,7 @@ export default class DashboardServer {
                 return;
             }
 
-         const metadata = this.storage.getTraceMetadata(traceId)
+            const metadata = this.storage.getTraceMetadata(traceId)
             const response = this.responseDetailMapper.map(trace, metadata)
 
             res.statusCode = 200;
@@ -160,7 +167,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/errors$/, "");
 
-             const trace = this.storage.getTrace(traceId)
+            const trace = this.storage.getTrace(traceId)
 
             if (!trace) {
                 res.statusCode = 404;
@@ -188,7 +195,7 @@ export default class DashboardServer {
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
 
-             const trace = this.storage.getTrace(traceId)
+            const trace = this.storage.getTrace(traceId)
 
             if (!trace) {
                 res.statusCode = 404;

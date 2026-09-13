@@ -505,6 +505,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                 >
                   {status ?? "—"}
                 </Badge>
+                {/*
                 <Button
                   variant="outline"
                   size="sm"
@@ -515,13 +516,18 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                   {clearingHistory ? <Loader2 className="animate-spin" /> : <Trash2 />}
                   Clear History
                 </Button>
+                */}
                 <Button
                   variant="destructive"
                   size="sm"
                   disabled={deletingTrace || clearingHistory}
                   onClick={() => setDeleteDialogOpen(true)}
                 >
-                  <Trash2 />
+                  {deletingTrace ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Trash2 />
+                  )}
                   Delete
                 </Button>
               </div>
