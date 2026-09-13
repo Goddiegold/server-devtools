@@ -1,16 +1,44 @@
 import { useState, type FormEvent } from "react"
-import { Eye, EyeOff, LockKeyhole, SquareTerminal, UserRound } from "lucide-react"
+import { Eye, EyeOff, Loader2, LockKeyhole, SquareTerminal, UserRound } from "lucide-react"
 
+import { ApiError } from "@/api/client"
+import { login } from "@/api/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-export function LoginPage() {
+interface LoginPageProps {
+  onLoginSuccess: () => void
+}
+
+export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
+    if (loading) {
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      await login(username, password)
+      onLoginSuccess()
+    } catch (loginError) {
+      setError(
+        loginError instanceof ApiError && loginError.status === 401
+          ? "Invalid username or password"
+          : "Unable to sign in. Please try again."
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -30,6 +58,15 @@ export function LoginPage() {
               Sign in to access your backend inspector.
             </p>
           </div>
+
+          {error && (
+            <p
+              className="mb-5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-2">
@@ -88,8 +125,9 @@ export function LoginPage() {
               </div>
             </div>
 
-            <Button type="submit" className="h-10 w-full">
-              Sign in
+            <Button type="submit" className="h-10 w-full" disabled={loading}>
+              {loading && <Loader2 className="animate-spin" />}
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </div>

@@ -1,9 +1,10 @@
 import type { IExecutionNode } from "@/types"
+import { apiFetch } from "@/api/client"
 
 export async function getExecutionTree(
   traceId: string
 ): Promise<IExecutionNode[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `/_devtools/api/traces/${encodeURIComponent(traceId)}/execution`
   )
 

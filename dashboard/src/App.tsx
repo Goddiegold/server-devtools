@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 
+import { getProfile } from "@/api/auth"
+import { setUnauthorizedHandler } from "@/api/client"
 import type { IDashboardRequest } from "@/types"
 import { DashboardHeader } from "@/pages/dashboard-header"
 import { LoginPage } from "@/pages/login-page"
@@ -38,6 +40,9 @@ function parseRoute(pathname: string): DashboardRoute {
 }
 
 function App() {
+  const [authState, setAuthState] = useState<
+    "checking" | "authenticated" | "unauthenticated"
+  >("checking")
   const [route, setRoute] = useState<DashboardRoute>(() =>
     parseRoute(window.location.pathname)
   )
@@ -46,6 +51,34 @@ function App() {
     const handlePopState = () => setRoute(parseRoute(window.location.pathname))
     window.addEventListener("popstate", handlePopState)
     return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
+
+  useEffect(() => {
+    const clearUnauthorizedHandler = setUnauthorizedHandler(() => {
+      setAuthState("unauthenticated")
+    })
+    let active = true
+
+    void getProfile()
+      .then(() => {
+        if (active) {
+          setAuthState("authenticated")
+
+          if (parseRoute(window.location.pathname).kind === "login") {
+            navigate(REQUESTS_PATH)
+          }
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAuthState("unauthenticated")
+        }
+      })
+
+    return () => {
+      active = false
+      clearUnauthorizedHandler()
+    }
   }, [])
 
   function navigate(path: string) {
@@ -66,11 +99,26 @@ function App() {
     navigate(REQUESTS_PATH)
   }
 
+  function handleLoginSuccess() {
+    setAuthState("authenticated")
+    navigate(REQUESTS_PATH)
+  }
+
+  if (authState === "checking") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading dashboard...
+      </div>
+    )
+  }
+
+  if (authState === "unauthenticated") {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {route.kind !== "login" && <DashboardHeader />}
-
-      {route.kind === "login" && <LoginPage />}
 
       {route.kind === "requests" && (
         <RequestsPage onSelectRequest={selectRequest} />

@@ -1,4 +1,5 @@
 import type { IDevToolsTrace } from "@/types"
+import { apiFetch } from "@/api/client"
 
 export interface ITraceRequest {
   method?: string
@@ -27,7 +28,7 @@ export interface ITraceError {
 }
 
 export async function getTrace(traceId: string): Promise<IDevToolsTrace> {
-  const response = await fetch(
+  const response = await apiFetch(
     `/_devtools/api/traces/${encodeURIComponent(traceId)}`
   )
 
@@ -39,7 +40,7 @@ export async function getTrace(traceId: string): Promise<IDevToolsTrace> {
 }
 
 export async function getTraceRequest(traceId: string): Promise<ITraceRequest> {
-  const response = await fetch(
+  const response = await apiFetch(
     `/_devtools/api/traces/${encodeURIComponent(traceId)}/request`
   )
 
@@ -51,7 +52,7 @@ export async function getTraceRequest(traceId: string): Promise<ITraceRequest> {
 }
 
 export async function getTraceResponse(traceId: string): Promise<ITraceResponse> {
-  const response = await fetch(
+  const response = await apiFetch(
     `/_devtools/api/traces/${encodeURIComponent(traceId)}/response`
   )
 
@@ -63,7 +64,7 @@ export async function getTraceResponse(traceId: string): Promise<ITraceResponse>
 }
 
 export async function getTraceErrors(traceId: string): Promise<ITraceError[]> {
-  const response = await fetch(
+  const response = await apiFetch(
     `/_devtools/api/traces/${encodeURIComponent(traceId)}/errors`
   )
 
@@ -75,7 +76,7 @@ export async function getTraceErrors(traceId: string): Promise<ITraceError[]> {
 }
 
 export async function deleteTrace(traceId: string): Promise<void> {
-  const response = await fetch(
+  const response = await apiFetch(
     `/_devtools/api/traces/${encodeURIComponent(traceId)}`,
     { method: "DELETE" }
   )
@@ -86,7 +87,7 @@ export async function deleteTrace(traceId: string): Promise<void> {
 }
 
 export async function clearHistory(): Promise<void> {
-  const response = await fetch("/_devtools/api/traces", { method: "DELETE" })
+  const response = await apiFetch("/_devtools/api/traces", { method: "DELETE" })
 
   if (!response.ok) {
     throw new Error(`Failed to clear history: ${response.status}`)
