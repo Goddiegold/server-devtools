@@ -25,6 +25,36 @@ export default class DashboardServer {
         const requestUrl = req.url ?? '';
         const pathname = requestUrl.split('?')[0];
 
+        if (
+            req.method === Config.REQUEST_METHOD.DELETE &&
+            pathname === Config.DASHBOARD_API_ROUTES.TRACES
+        ) {
+            this.storage.clearHistory();
+            res.statusCode = 204;
+            res.end();
+            return;
+        }
+
+        if (
+            req.method === Config.REQUEST_METHOD.DELETE &&
+            pathname.startsWith(`${Config.DASHBOARD_API_ROUTES.TRACES}/`)
+        ) {
+            const traceId = decodeURIComponent(pathname.slice(
+                `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
+            ));
+
+            if (!this.storage.getTrace(traceId)) {
+                res.statusCode = 404;
+                res.end();
+                return;
+            }
+
+            this.storage.deleteTrace(traceId);
+            res.statusCode = 204;
+            res.end();
+            return;
+        }
+
         if (req.method === Config.REQUEST_METHOD.GET &&
             req.url?.startsWith(`${Config.DASHBOARD_API_ROUTES.TRACES}/`) &&
             req.url.endsWith("/execution")) {

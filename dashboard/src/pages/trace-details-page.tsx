@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 
 import { getExecutionTree } from "@/api/execution"
 import {
+  clearHistory,
+  deleteTrace,
   getTrace,
   getTraceRequest,
   getTraceResponse,
@@ -10,14 +12,17 @@ import {
   type ITraceRequest,
   type ITraceResponse,
 } from "@/api/traces"
+import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ExecutionTree } from "@/components/execution-tree"
 import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
+import { Loader2, Trash2 } from "lucide-react"
 
 interface TraceDetailsPageProps {
   traceId: string
   onBack: () => void
+  onDeleted: () => void
 }
 
 function rootHttpSpan(trace: IDevToolsTrace): IDevToolsSpan | undefined {
@@ -202,7 +207,7 @@ function ErrorDetails({ errors }: { errors: ITraceError[] }) {
   )
 }
 
-export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
+export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPageProps) {
   const [trace, setTrace] = useState<IDevToolsTrace | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -219,6 +224,55 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
   const [capturedErrors, setCapturedErrors] = useState<ITraceError[] | null>(null)
   const [capturedErrorsLoading, setCapturedErrorsLoading] = useState(false)
   const [capturedErrorsError, setCapturedErrorsError] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingTrace, setDeletingTrace] = useState(false)
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [clearingHistory, setClearingHistory] = useState(false)
+  const [destructiveError, setDestructiveError] = useState<string | null>(null)
+
+  async function confirmDelete() {
+    if (deletingTrace) {
+      return
+    }
+
+    setDeletingTrace(true)
+    setDestructiveError(null)
+
+    try {
+      await deleteTrace(traceId)
+      onDeleted()
+    } catch (deleteError) {
+      setDestructiveError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Failed to delete trace"
+      )
+    } finally {
+      setDeletingTrace(false)
+    }
+  }
+
+  async function confirmClearHistory() {
+    if (clearingHistory) {
+      return
+    }
+
+    setClearingHistory(true)
+    setDestructiveError(null)
+
+    try {
+      await clearHistory()
+      onDeleted()
+    } catch (clearError) {
+      setDestructiveError(
+        clearError instanceof Error
+          ? clearError.message
+          : "Failed to clear history"
+      )
+    } finally {
+      setClearingHistory(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -420,6 +474,12 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
         </div>
       )}
 
+      {destructiveError && (
+        <div className="mb-4 rounded-md border border-destructive/30 p-3 text-sm text-destructive">
+          {destructiveError}
+        </div>
+      )}
+
       {!loading && !error && trace && (
         <>
           <section className="rounded-md border p-6">
@@ -439,11 +499,32 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
                 </p>
               </div>
 
-              <Badge
-                variant={status && Number(status) >= 400 ? "destructive" : "outline"}
-              >
-                {status ?? "—"}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant={status && Number(status) >= 400 ? "destructive" : "outline"}
+                >
+                  {status ?? "—"}
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={deletingTrace || clearingHistory}
+                  onClick={() => setClearDialogOpen(true)}
+                >
+                  {clearingHistory ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                  Clear History
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={deletingTrace || clearingHistory}
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 />
+                  Delete
+                </Button>
+              </div>
             </div>
           </section>
 
@@ -537,6 +618,52 @@ export function TraceDetailsPage({ traceId, onBack }: TraceDetailsPageProps) {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!deletingTrace) {
+            setDeleteDialogOpen(open)
+          }
+        }}
+        title="Delete trace?"
+        description="This permanently deletes the selected trace and all associated request, response, execution, and error data."
+      >
+        <AlertDialogPrimitive.Close render={<Button variant="outline" disabled={deletingTrace} />}>
+          Cancel
+        </AlertDialogPrimitive.Close>
+        <Button
+          variant="destructive"
+          disabled={deletingTrace}
+          onClick={() => void confirmDelete()}
+        >
+          {deletingTrace && <Loader2 className="animate-spin" />}
+          Delete trace
+        </Button>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={clearDialogOpen}
+        onOpenChange={(open) => {
+          if (!clearingHistory) {
+            setClearDialogOpen(open)
+          }
+        }}
+        title="Clear all history?"
+        description="This permanently deletes all captured ServerDevTools history, including traces, spans, request and response data, execution data, and errors."
+      >
+        <AlertDialogPrimitive.Close render={<Button variant="outline" disabled={clearingHistory} />}>
+          Cancel
+        </AlertDialogPrimitive.Close>
+        <Button
+          variant="destructive"
+          disabled={clearingHistory}
+          onClick={() => void confirmClearHistory()}
+        >
+          {clearingHistory && <Loader2 className="animate-spin" />}
+          Clear history
+        </Button>
+      </ConfirmDialog>
     </main>
   )
 }

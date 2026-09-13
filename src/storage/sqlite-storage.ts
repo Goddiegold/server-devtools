@@ -86,6 +86,16 @@ export default class SQLiteStorage {
                 ? JSON.stringify(span.error)
                 : null,
         );
+
+        // Handles the case where the trace summary already exists
+        // when an errored child span arrives.
+        if (span.error) {
+            this.db.prepare(`
+            UPDATE traces
+            SET has_error = 1
+            WHERE trace_id = ?
+        `).run(span.traceId);
+        }
     }
 
     getSpansByTraceId(traceId: string): IDevToolsSpan[] {
@@ -171,6 +181,17 @@ export default class SQLiteStorage {
                 ? span.attributes["http.route"]
                 : null;
 
+        // The error may exist on a child span rather than the root HTTP span.
+        const errorSpan = this.db.prepare(`
+        SELECT 1
+        FROM spans
+        WHERE trace_id = ?
+          AND error_json IS NOT NULL
+        LIMIT 1
+    `).get(span.traceId);
+
+        const hasError = errorSpan ? 1 : 0;
+
         const statement = this.db.prepare(`
         INSERT INTO traces (
             trace_id,
@@ -185,6 +206,7 @@ export default class SQLiteStorage {
             created_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
         ON CONFLICT(trace_id) DO UPDATE SET
             root_span_id = excluded.root_span_id,
             started_at = excluded.started_at,
@@ -193,7 +215,12 @@ export default class SQLiteStorage {
             path = excluded.path,
             route = excluded.route,
             status_code = excluded.status_code,
-            has_error = excluded.has_error
+            has_error = CASE
+                WHEN traces.has_error = 1
+                    OR excluded.has_error = 1
+                THEN 1
+                ELSE 0
+            END
     `);
 
         statement.run(
@@ -205,7 +232,7 @@ export default class SQLiteStorage {
             path,
             route,
             statusCode,
-            span.error ? 1 : 0,
+            hasError,
             Date.now(),
         );
     }
@@ -326,6 +353,49 @@ export default class SQLiteStorage {
                 }
                 : undefined,
         };
+    }
+
+    deleteTrace(traceId: string): void {
+        this.db.exec("BEGIN");
+
+        try {
+            this.db.prepare(`
+            DELETE FROM trace_metadata
+            WHERE trace_id = ?
+        `).run(traceId);
+
+            this.db.prepare(`
+            DELETE FROM spans
+            WHERE trace_id = ?
+        `).run(traceId);
+
+            this.db.prepare(`
+            DELETE FROM traces
+            WHERE trace_id = ?
+        `).run(traceId);
+
+            this.db.exec("COMMIT");
+        } catch (error) {
+            this.db.exec("ROLLBACK");
+            throw error;
+        }
+    }
+
+    clearHistory(): void {
+        this.db.exec("BEGIN");
+
+        try {
+            this.db.exec(`
+            DELETE FROM trace_metadata;
+            DELETE FROM spans;
+            DELETE FROM traces;
+        `);
+
+            this.db.exec("COMMIT");
+        } catch (error) {
+            this.db.exec("ROLLBACK");
+            throw error;
+        }
     }
 
     close(): void {

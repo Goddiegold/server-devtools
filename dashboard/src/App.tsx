@@ -2,18 +2,25 @@ import { useEffect, useState } from "react"
 
 import type { IDashboardRequest } from "@/types"
 import { DashboardHeader } from "@/pages/dashboard-header"
+import { LoginPage } from "@/pages/login-page"
 import { RequestsPage } from "@/pages/requests-page"
 import { TraceDetailsPage } from "@/pages/trace-details-page"
 
 const REQUESTS_PATH = "/_devtools"
+const LOGIN_PATH = "/login"
 const TRACE_PATH_PREFIX = `${REQUESTS_PATH}/traces/`
 
 type DashboardRoute =
+  | { kind: "login" }
   | { kind: "requests" }
   | { kind: "trace"; traceId: string }
   | { kind: "not-found" }
 
 function parseRoute(pathname: string): DashboardRoute {
+  if (pathname === LOGIN_PATH || pathname === `${LOGIN_PATH}/`) {
+    return { kind: "login" }
+  }
+
   if (pathname === REQUESTS_PATH || pathname === `${REQUESTS_PATH}/`) {
     return { kind: "requests" }
   }
@@ -61,14 +68,20 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <DashboardHeader />
+      {route.kind !== "login" && <DashboardHeader />}
+
+      {route.kind === "login" && <LoginPage />}
 
       {route.kind === "requests" && (
         <RequestsPage onSelectRequest={selectRequest} />
       )}
 
       {route.kind === "trace" && (
-        <TraceDetailsPage traceId={route.traceId} onBack={backToRequests} />
+        <TraceDetailsPage
+          traceId={route.traceId}
+          onBack={backToRequests}
+          onDeleted={() => navigate(REQUESTS_PATH)}
+        />
       )}
 
       {route.kind === "not-found" && (

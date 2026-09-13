@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react"
 
+import { clearHistory, deleteTrace } from "@/api/traces"
 import { getRequests } from "@/api/requests"
+import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { IDashboardRequest } from "@/types"
+import { Loader2, Trash2 } from "lucide-react"
 
 interface RequestsPageProps {
   onSelectRequest: (request: IDashboardRequest) => void
@@ -12,6 +16,59 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [requests, setRequests] = useState<IDashboardRequest[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<IDashboardRequest | null>(null)
+  const [deletingTraceId, setDeletingTraceId] = useState<string | null>(null)
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [clearingHistory, setClearingHistory] = useState(false)
+
+  async function confirmDelete() {
+    if (!pendingDelete || deletingTraceId !== null) {
+      return
+    }
+
+    const traceId = pendingDelete.id
+    setDeletingTraceId(traceId)
+    setError(null)
+
+    try {
+      await deleteTrace(traceId)
+      setRequests((currentRequests) =>
+        currentRequests.filter((request) => request.id !== traceId)
+      )
+      setPendingDelete(null)
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Failed to delete request"
+      )
+    } finally {
+      setDeletingTraceId(null)
+    }
+  }
+
+  async function confirmClearHistory() {
+    if (clearingHistory) {
+      return
+    }
+
+    setClearingHistory(true)
+    setError(null)
+
+    try {
+      await clearHistory()
+      setRequests([])
+      setClearDialogOpen(false)
+    } catch (clearError) {
+      setError(
+        clearError instanceof Error
+          ? clearError.message
+          : "Failed to clear history"
+      )
+    } finally {
+      setClearingHistory(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -50,11 +107,24 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
 
   return (
     <main className="p-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">Requests</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Inspect incoming requests and their execution.
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Requests</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Inspect incoming requests and their execution.
+          </p>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-destructive hover:text-destructive"
+          disabled={clearingHistory || deletingTraceId !== null}
+          onClick={() => setClearDialogOpen(true)}
+        >
+          {clearingHistory ? <Loader2 className="animate-spin" /> : <Trash2 />}
+          Clear History
+        </Button>
       </div>
 
       <div className="mb-4 max-w-md">
@@ -69,6 +139,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
               <th className="px-4 py-3 font-medium">PATH</th>
               <th className="px-4 py-3 font-medium">STATUS</th>
               <th className="px-4 py-3 text-right font-medium">DURATION</th>
+              <th className="w-12 px-4 py-3" />
             </tr>
           </thead>
 
@@ -96,6 +167,24 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                     ? `${request.durationMs.toFixed(1)}ms`
                     : "—"}
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete ${request.method} ${request.path}`}
+                    disabled={deletingTraceId !== null || clearingHistory}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setPendingDelete(request)
+                    }}
+                  >
+                    {deletingTraceId === request.id ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Trash2 />
+                    )}
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -117,6 +206,56 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && deletingTraceId === null) {
+            setPendingDelete(null)
+          }
+        }}
+        title="Delete trace?"
+        description={
+          pendingDelete
+            ? `This permanently deletes ${pendingDelete.method} ${pendingDelete.path} and all associated request, response, execution, and error data.`
+            : "This permanently deletes the selected trace and all of its captured data."
+        }
+      >
+        <AlertDialogPrimitive.Close render={<Button variant="outline" disabled={deletingTraceId !== null} />}>
+          Cancel
+        </AlertDialogPrimitive.Close>
+        <Button
+          variant="destructive"
+          disabled={deletingTraceId !== null}
+          onClick={() => void confirmDelete()}
+        >
+          {deletingTraceId !== null && <Loader2 className="animate-spin" />}
+          Delete trace
+        </Button>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={clearDialogOpen}
+        onOpenChange={(open) => {
+          if (!clearingHistory) {
+            setClearDialogOpen(open)
+          }
+        }}
+        title="Clear all history?"
+        description="This permanently deletes all captured ServerDevTools history, including traces, spans, request and response data, execution data, and errors."
+      >
+        <AlertDialogPrimitive.Close render={<Button variant="outline" disabled={clearingHistory} />}>
+          Cancel
+        </AlertDialogPrimitive.Close>
+        <Button
+          variant="destructive"
+          disabled={clearingHistory}
+          onClick={() => void confirmClearHistory()}
+        >
+          {clearingHistory && <Loader2 className="animate-spin" />}
+          Clear history
+        </Button>
+      </ConfirmDialog>
     </main>
   )
 }

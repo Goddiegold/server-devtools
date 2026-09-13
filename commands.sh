@@ -10,7 +10,7 @@ node --import ./dist/src/register.js ./dist/examples/express/server.js
 NODE_OPTIONS="--experimental-loader=@opentelemetry/instrumentation/hook.mjs" \
 node --import ./dist/src/register.js ./dist/examples/nestjs/main.js
 
-npx ./examples/dashboard/server.ts
+npx tsx ./examples/dashboard/server.ts
 
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \

@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import SQLiteStorage from "../src/storage/sqlite-storage";
 import EncryptDecryptService from "../src/security/encrypt-decrypt.service";
+import { IDevToolsSpan } from "../src/types";
 
 /**
  * Basic SQLite storage tests
@@ -148,6 +149,66 @@ assert.equal(
     storage.getTraceMetadata("missing-trace"),
     undefined,
 );
+
+// Delete all persisted data for one trace.
+storage.deleteTrace("trace-1");
+
+assert.equal(storage.getTrace("trace-1"), undefined);
+assert.deepEqual(storage.getSpansByTraceId("trace-1"), []);
+assert.equal(storage.getTraceMetadata("trace-1"), undefined);
+assert.deepEqual(storage.getTraceSummaries(), []);
+
+// Clear all history and verify the storage can be reused afterward.
+for (const traceId of ["trace-2", "trace-3"]) {
+    const rootSpan: IDevToolsSpan = {
+        traceId,
+        spanId: `${traceId}-root`,
+        type: "http.server",
+        name: "GET /health",
+        startedAt: 2000,
+        durationMs: 10,
+        attributes: {
+            "http.request.method": "GET",
+        },
+        status: {
+            code: 0,
+        },
+    };
+
+    storage.saveSpan(rootSpan);
+    storage.saveTraceSummary(rootSpan);
+    storage.saveRequestBody(traceId, { traceId });
+    storage.saveResponseBody(traceId, { ok: true });
+}
+
+storage.clearHistory();
+
+assert.deepEqual(storage.getTraceSummaries(), []);
+assert.equal(storage.getTrace("trace-2"), undefined);
+assert.equal(storage.getTrace("trace-3"), undefined);
+assert.equal(storage.getTraceMetadata("trace-2"), undefined);
+assert.equal(storage.getTraceMetadata("trace-3"), undefined);
+
+const postClearTrace: IDevToolsSpan = {
+    traceId: "trace-after-clear",
+    spanId: "trace-after-clear-root",
+    type: "http.server",
+    name: "GET /after-clear",
+    startedAt: 3000,
+    durationMs: 5,
+    attributes: {
+        "http.request.method": "GET",
+    },
+    status: {
+        code: 0,
+    },
+};
+
+storage.saveSpan(postClearTrace);
+storage.saveTraceSummary(postClearTrace);
+
+assert.equal(storage.getTrace("trace-after-clear")?.traceId, "trace-after-clear");
+assert.equal(storage.getTraceSummaries().length, 1);
 
 storage.close();
 

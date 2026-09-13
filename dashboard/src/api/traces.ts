@@ -73,3 +73,22 @@ export async function getTraceErrors(traceId: string): Promise<ITraceError[]> {
 
   return response.json()
 }
+
+export async function deleteTrace(traceId: string): Promise<void> {
+  const response = await fetch(
+    `/_devtools/api/traces/${encodeURIComponent(traceId)}`,
+    { method: "DELETE" }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete trace: ${response.status}`)
+  }
+}
+
+export async function clearHistory(): Promise<void> {
+  const response = await fetch("/_devtools/api/traces", { method: "DELETE" })
+
+  if (!response.ok) {
+    throw new Error(`Failed to clear history: ${response.status}`)
+  }
+}

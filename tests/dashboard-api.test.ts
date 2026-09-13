@@ -99,6 +99,20 @@ async function run() {
       message: 'Trace not found',
     });
 
+    const deleteResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-123`,
+      { method: 'DELETE' },
+    );
+
+    assert.equal(deleteResponse.status, 204);
+
+    const deleteUnknownResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/traces/missing`,
+      { method: 'DELETE' },
+    );
+
+    assert.equal(deleteUnknownResponse.status, 404);
+
     const executionTrace: IDevToolsTrace = {
       traceId: "trace-execution",
       rootSpanId: "root-execution",
@@ -159,6 +173,20 @@ async function run() {
       executionResponseBody[0].children[0].span.spanId,
       "db-execution"
     );
+
+    const clearHistoryResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/traces`,
+      { method: 'DELETE' },
+    );
+
+    assert.equal(clearHistoryResponse.status, 204);
+
+    const requestsAfterClear = await fetch(
+      `http://127.0.0.1:${address.port}/_devtools/api/requests`,
+    );
+
+    assert.equal(requestsAfterClear.status, 200);
+    assert.deepEqual(await requestsAfterClear.json(), []);
 
 
     console.log('Dashboard API test passed');
