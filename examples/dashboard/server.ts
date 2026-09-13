@@ -7,10 +7,10 @@ async function bootstrap() {
   const devtools = new ServerDevTools({
     encryption: {
       key: "K2I3QiRWSThQR2JWUHNbRXAmRXcuJChteVBCMDhCRTE="
-    }, 
-    auth:{
-      username:"godwin", 
-      password:"12345678"
+    },
+    auth: {
+      username: "godwin",
+      password: "12345678"
     }
   });
 
@@ -22,26 +22,11 @@ async function bootstrap() {
   const express = require("express");
   const app = express() as Express;
 
-  app.use(express.json());
-  // ServerDevTools runs on the SAME Express server.
-  // app.use("/_devtools", (req, res) => {
-  //     devtools.handle(req, res);
-  // });
-
   app.use((req, res, next) => {
-    devtools.middleware(req, res)
-
-    // if (req.url.startsWith("/_devtools")) {
-    //   console.log({
-    //     method: req.method,
-    //     url: req.url,
-    //   });
-    //   devtools.handle(req, res);
-    //   return;
-    // }
-
-    next();
+    devtools.middleware(req, res, next)
   });
+
+  app.use(express.json());
 
   app.get("/users/:id", async (req, res) => {
     const response = await fetch('https://example.com');

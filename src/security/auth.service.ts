@@ -7,7 +7,9 @@ class AuthService {
         private readonly username: string,
         private readonly password: string,
         private readonly storage: SQLiteStorage,
-    ) { }
+    ) {
+        this.username = this.username ? this.username?.toLowerCase()?.trim() : ''
+    }
 
     private generateSessionToken(): string {
         return crypto.randomBytes(32).toString("base64url");
@@ -25,8 +27,9 @@ class AuthService {
         username: string,
         password: string,
     ): boolean {
+        const normalizedUsername = username ? username?.toLowerCase()?.trim() : null
         return (
-            username === this.username &&
+            normalizedUsername === this.username &&
             password === this.password
         );
     }
@@ -39,9 +42,11 @@ class AuthService {
         const createdAt = Date.now();
         const expiresAt = createdAt + (24 * 60 * 60 * 1000);
 
+        const normalizedUsername = username?.toLowerCase()?.trim()
+
         this.storage.saveSession({
             sessionHash,
-            username,
+            username: normalizedUsername,
             createdAt,
             expiresAt,
         });

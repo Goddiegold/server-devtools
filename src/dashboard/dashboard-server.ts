@@ -22,10 +22,81 @@ export default class DashboardServer {
     ) {
     }
 
+    private readJsonBody(
+        req: IncomingMessage,
+    ): Promise<unknown> {
+        return new Promise((resolve, reject) => {
+            let body = "";
+
+            req.on("data", (chunk) => {
+                body += chunk.toString();
+            });
+
+            req.on("end", () => {
+                try {
+                    resolve(body ? JSON.parse(body) : {});
+                } catch (error) {
+                    reject(error);
+                }
+            });
+
+            req.on("error", reject);
+        });
+    }
+
+    private async handleLogin(req: IncomingMessage,
+        res: ServerResponse) {
+        const body = await this.readJsonBody(req);
+
+        const username = body?.username || null
+        const password = body?.password || null
+
+        if (!username || !password) {
+            res.statusCode = 400;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                message: "Password and Username are required!",
+            }));
+            return;
+        }
+
+
+        const valid = this.authService.validateCredentials(username, password)
+        if (!valid) {
+            res.statusCode = 401;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                message: "Invalid Auth Credentials",
+            }));
+            return;
+        }
+
+
+        const token = this.authService.createSession(username)
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader(
+            "Set-Cookie",
+            `sdt_session=${token}; HttpOnly; SameSite=Strict; Path=/_devtools`,
+        );
+        res.setHeader("Cache-Control", "no-store");
+
+        res.end(JSON.stringify({
+            username,
+        }));
+        return;
+    }
+
     handle(req: IncomingMessage,
         res: ServerResponse,) {
         const requestUrl = req.url ?? '';
         const pathname = requestUrl.split('?')[0];
+        if (
+            req.method === "POST" &&
+            pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/login`
+        ) {
+            return this.handleLogin(req, res);
+        }
 
         if (
             req.method === Config.REQUEST_METHOD.DELETE &&

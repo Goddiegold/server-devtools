@@ -56,7 +56,7 @@ class ServerDevTools {
         return this.dashboard.handle(req, res);
     }
 
-    middleware(req: IncomingMessage, res: ServerResponse) {
+    middleware(req: IncomingMessage, res: ServerResponse, next: () => void) {
         if (req?.url?.startsWith("/_devtools") === true) {
             //maybe call the handle func
             this.handle(req, res);
@@ -66,82 +66,82 @@ class ServerDevTools {
 
         const activeSpan = trace.getSpan(context.active());
         const traceId = activeSpan?.spanContext().traceId;
-        if (!traceId) {
 
-            return;
-        }
-        const chunks = []
+        if (traceId) {
+            const chunks = []
 
-        console.log("ACTIVE TRACE ID:", traceId);
+            console.log("ACTIVE TRACE ID:", traceId);
 
-        const storage = this.storage
+            const storage = this.storage
 
-        const originalWriteFunc = res.write;
+            const originalWriteFunc = res.write;
 
-        res.write = function (...args) {
-            const chunk = args[0];
+            res.write = function (...args) {
+                const chunk = args[0];
 
 
-            if (Buffer.isBuffer(chunk)) {
-                const pureText = chunk.toString("utf8")
-                console.log(
-                    "RESPONSE BODY (res.write):",
-                    pureText
-                );
-                chunks.push(pureText)
-            } else {
-                console.log(
-                    "RESPONSE BODY (res.write):",
-                    chunk
-                );
+                if (Buffer.isBuffer(chunk)) {
+                    const pureText = chunk.toString("utf8")
+                    console.log(
+                        "RESPONSE BODY (res.write):",
+                        pureText
+                    );
+                    chunks.push(pureText)
+                } else {
+                    console.log(
+                        "RESPONSE BODY (res.write):",
+                        chunk
+                    );
 
-                chunks.push(chunk)
-            }
-
-            return originalWriteFunc.apply(this, args);
-        };
-
-        const originalEndFunc = res.end;
-        res.end = function (...args) {
-            const chunk = args[0];
-
-            if (Buffer.isBuffer(chunk)) {
-                const pureText = chunk.toString("utf8")
-
-                console.log(
-                    "RESPONSE BODY (res.end):",
-                    pureText
-                );
-
-                chunks.push(pureText)
-            } else if (typeof chunk === "string") {
-                console.log(
-                    "RESPONSE BODY (res.end):",
-                    chunk
-                );
-
-                chunks.push(chunk)
-            }
-
-
-            const rawBody = chunks.join("");
-
-            const contentType = res.getHeader("content-type");
-            let body = rawBody
-
-            if (typeof contentType === 'string' && contentType.includes("application/json")) {
-                try {
-                    body = JSON.parse(rawBody);
-                } catch (e) {
-
+                    chunks.push(chunk)
                 }
-            }
 
-            storage.saveResponseBody(traceId, body)
-            return originalEndFunc.apply(this, args);
-        };
+                return originalWriteFunc.apply(this, args);
+            };
+
+            const originalEndFunc = res.end;
+            res.end = function (...args) {
+                const chunk = args[0];
+
+                if (Buffer.isBuffer(chunk)) {
+                    const pureText = chunk.toString("utf8")
+
+                    console.log(
+                        "RESPONSE BODY (res.end):",
+                        pureText
+                    );
+
+                    chunks.push(pureText)
+                } else if (typeof chunk === "string") {
+                    console.log(
+                        "RESPONSE BODY (res.end):",
+                        chunk
+                    );
+
+                    chunks.push(chunk)
+                }
 
 
+                const rawBody = chunks.join("");
+
+                const contentType = res.getHeader("content-type");
+                let body = rawBody
+
+                if (typeof contentType === 'string' && contentType.includes("application/json")) {
+                    try {
+                        body = JSON.parse(rawBody);
+                    } catch (e) {
+
+                    }
+                }
+
+                storage.saveResponseBody(traceId, body)
+                return originalEndFunc.apply(this, args);
+            };
+        }
+
+
+        next()
     }
 
     async shutdown() {
