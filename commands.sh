@@ -34,3 +34,8 @@ curl -i http://localhost:3000/error-test
 curl http://localhost:3000/users/123    
 SERVER_DEVTOOLS_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 rm server-devtools.db
+
+curl -c cookies.txt \
+  -X POST http://localhost:3000/_devtools/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"godwin","password":"12345678"}'

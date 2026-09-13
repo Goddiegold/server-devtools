@@ -44,6 +44,27 @@ export default class DashboardServer {
         });
     }
 
+    private getCookie(
+        req: IncomingMessage,
+        name: string,
+    ): string | undefined {
+        const cookieHeader = req.headers.cookie;
+
+        if (!cookieHeader) return undefined;
+
+        const cookies = cookieHeader.split(";");
+
+        for (const cookie of cookies) {
+            const [key, ...valueParts] = cookie.trim().split("=");
+
+            if (key === name) {
+                return decodeURIComponent(valueParts.join("="));
+            }
+        }
+
+        return undefined;
+    }
+
     private async handleLogin(req: IncomingMessage,
         res: ServerResponse) {
         const body = await this.readJsonBody(req);
@@ -87,10 +108,53 @@ export default class DashboardServer {
         return;
     }
 
+    private handleProfile(
+        req: IncomingMessage,
+        res: ServerResponse,
+    ): void {
+        const token = this.getCookie(req, "sdt_session");
+
+        if (!token) {
+            res.statusCode = 401;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                message: "Unauthorized",
+            }));
+            return;
+        }
+
+        const session = this.authService.getSession(token);
+
+        if (!session) {
+            res.statusCode = 401;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                message: "Unauthorized",
+            }));
+            return;
+        }
+
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+
+        res.end(JSON.stringify({
+            username: session.username,
+        }));
+    }
+
     handle(req: IncomingMessage,
         res: ServerResponse,) {
         const requestUrl = req.url ?? '';
         const pathname = requestUrl.split('?')[0];
+
+        if (
+            req.method === "GET" &&
+            pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/profile`
+        ) {
+            return this.handleProfile(req, res);
+        }
+
         if (
             req.method === "POST" &&
             pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/login`
