@@ -1,3 +1,4 @@
+import { IncomingMessage } from "node:http";
 
 export interface IDevToolsRequest {
     method: string;
@@ -11,6 +12,11 @@ export interface IDevToolsRequest {
     body?: unknown;
 }
 
+
+export interface IDevToolsCurrentUser {
+    [key: string]: unknown;
+}
+
 export interface IServerDevlToolsParams {
     encryption?: {
         key: string,
@@ -19,5 +25,8 @@ export interface IServerDevlToolsParams {
     auth: {
         password: string,
         username: string
-    }
+    },
+    getCurrentUser?: (
+        req: IncomingMessage,
+    ) => IDevToolsCurrentUser | undefined;
 }

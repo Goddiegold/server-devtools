@@ -11,7 +11,20 @@ async function bootstrap() {
     auth: {
       username: "godwin",
       password: "12345678"
-    }
+    },
+    getCurrentUser: (req) => {
+      const user = (req as any).user;
+
+      if (!user) {
+        return undefined;
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      };
+    },
   });
 
   // Start OpenTelemetry instrumentation BEFORE loading/starting
