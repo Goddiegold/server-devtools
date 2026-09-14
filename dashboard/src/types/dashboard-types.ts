@@ -1,3 +1,5 @@
+import type { IDevToolsCurrentUser } from "./traces.types"
+
 export interface IDashboardRequest {
   id: string
   method: string
@@ -7,4 +9,5 @@ export interface IDashboardRequest {
   durationMs?: number
   startedAt: number
   hasError: boolean
+  user?: IDevToolsCurrentUser
 }

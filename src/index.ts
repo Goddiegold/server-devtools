@@ -15,6 +15,7 @@ class ServerDevTools {
     private dashboard: DashboardServer;
     private storage: SQLiteStorage
     private authService: AuthService
+    private readonly getCurrentUser?: IServerDevlToolsParams["getCurrentUser"];
 
     constructor(
         options: IServerDevlToolsParams
@@ -46,6 +47,8 @@ class ServerDevTools {
             this.storage,
             this.authService
         );
+
+        this.getCurrentUser = options.getCurrentUser;
     }
 
     async start() {
@@ -138,6 +141,17 @@ class ServerDevTools {
                 storage.saveResponseBody(traceId, body)
                 return originalEndFunc.apply(this, args);
             };
+
+            if (this.getCurrentUser) {
+                res.once("finish", () => {
+                    try {
+                        const user = this.getCurrentUser?.(req);
+                        this.storage.saveCurrentUser(traceId, user!)
+                    } catch (error) {
+                        console.error("Failed to resolve current user:", error);
+                    }
+                });
+            }
         }
 
 

@@ -12,6 +12,21 @@ interface RequestsPageProps {
   onSelectRequest: (request: IDashboardRequest) => void
 }
 
+function userIdentity(user: IDashboardRequest["user"]): string | undefined {
+  for (const key of ["email", "name", "username", "id"]) {
+    const value = user?.[key]
+    if (
+      (typeof value === "string" && value.trim().length > 0) ||
+      (typeof value === "number" && Number.isFinite(value)) ||
+      typeof value === "boolean"
+    ) {
+      return String(value)
+    }
+  }
+
+  return user ? "Authenticated user" : undefined
+}
+
 export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [requests, setRequests] = useState<IDashboardRequest[]>([])
   const [loading, setLoading] = useState(false)
@@ -138,6 +153,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
               <th className="px-4 py-3 font-medium">METHOD</th>
               <th className="px-4 py-3 font-medium">PATH</th>
               <th className="px-4 py-3 font-medium">STATUS</th>
+              <th className="px-4 py-3 font-medium">USER</th>
               <th className="px-4 py-3 font-medium">STARTED AT</th>
               <th className="px-4 py-3 text-right font-medium">DURATION</th>
               <th className="w-12 px-4 py-3" />
@@ -162,6 +178,11 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                 <td className="px-4 py-3 font-mono">{request.path}</td>
                 <td className="px-4 py-3 font-mono">
                   {request.statusCode ?? "—"}
+                </td>
+                <td className="max-w-48 px-4 py-3" title={userIdentity(request.user)}>
+                  <span className="block truncate">
+                    {userIdentity(request.user) ?? "—"}
+                  </span>
                 </td>
                 <td className="px-4 py-3 font-mono whitespace-nowrap">
                   {new Date(request.startedAt).toLocaleString()}

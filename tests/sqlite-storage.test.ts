@@ -112,7 +112,44 @@ assert.deepEqual(summaries[0], {
     route: "/users",
     statusCode: 201,
     hasError: false,
+    user: undefined,
 });
+
+const currentUser = {
+    id: "user-1",
+    email: "john@example.com",
+};
+
+// A user can be saved before the trace summary exists.
+storage.saveCurrentUser("trace-before-summary", currentUser);
+assert.deepEqual(storage.getTraceSummaries(), [summaries[0]]);
+
+storage.saveTraceSummary({
+    traceId: "trace-before-summary",
+    spanId: "trace-before-summary-root",
+    type: "http.server",
+    name: "GET /profile",
+    startedAt: 900,
+    durationMs: 8,
+    attributes: {
+        "http.request.method": "GET",
+    },
+    status: {
+        code: 0,
+    },
+});
+
+assert.deepEqual(
+    storage.getTraceSummaries().find(summary => summary.traceId === "trace-before-summary")?.user,
+    currentUser,
+);
+
+// A user can also be saved after the trace summary already exists.
+storage.saveCurrentUser("trace-1", currentUser);
+assert.deepEqual(
+    storage.getTraceSummaries().find(summary => summary.traceId === "trace-1")?.user,
+    currentUser,
+);
 
 // Save request metadata
 storage.saveRequestBody("trace-1", {
@@ -142,7 +179,21 @@ assert.deepEqual(metadata, {
             success: true,
         },
     },
+    user: currentUser,
 });
+
+// Updating user metadata preserves request and response metadata.
+const updatedUser = { ...currentUser, role: "admin" };
+storage.saveCurrentUser("trace-1", updatedUser);
+assert.deepEqual(storage.getTraceMetadata("trace-1"), {
+    ...metadata,
+    user: updatedUser,
+});
+
+assert.deepEqual(
+    storage.getTraceSummaries().find(summary => summary.traceId === "trace-before-summary")?.user,
+    currentUser,
+);
 
 // Missing metadata
 assert.equal(
@@ -152,6 +203,7 @@ assert.equal(
 
 // Delete all persisted data for one trace.
 storage.deleteTrace("trace-1");
+storage.deleteTrace("trace-before-summary");
 
 assert.equal(storage.getTrace("trace-1"), undefined);
 assert.deepEqual(storage.getSpansByTraceId("trace-1"), []);
@@ -268,6 +320,16 @@ encryptedStorage.saveResponseBody(
     responseBody,
 );
 
+const encryptedUser = {
+    email: "john@example.com",
+    password: "user-secret",
+};
+
+encryptedStorage.saveCurrentUser(
+    "encrypted-trace",
+    encryptedUser,
+);
+
 /**
  * Public read should decrypt everything back to
  * its original representation.
@@ -284,6 +346,7 @@ assert.deepEqual(encryptedMetadata, {
     response: {
         body: responseBody,
     },
+    user: encryptedUser,
 });
 
 encryptedStorage.close();
@@ -299,12 +362,14 @@ const rawDb = new DatabaseSync(encryptedDbPath);
 const rawRow = rawDb.prepare(`
     SELECT
         request_body,
-        response_body
+        response_body,
+        user_json
     FROM trace_metadata
     WHERE trace_id = ?
 `).get("encrypted-trace") as {
     request_body: string;
     response_body: string;
+    user_json: string;
 } | undefined;
 
 assert.ok(rawRow);
@@ -351,6 +416,9 @@ assert.equal(
     rawRow.response_body.includes("sdt:v1:"),
     true,
 );
+
+assert.equal(rawRow.user_json.includes("user-secret"), false);
+assert.equal(rawRow.user_json.includes("sdt:v1:"), true);
 
 rawDb.close();
 

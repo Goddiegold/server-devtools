@@ -326,10 +326,11 @@ export default class DashboardServer {
 
             const metadata = this.storage.getTraceMetadata(traceId)
             const request = this.requestDetailMapper.map(trace, metadata);
+            const user = metadata?.user;
 
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify(request));
+            res.end(JSON.stringify({...request, user}));
             return;
 
         }
@@ -357,10 +358,11 @@ export default class DashboardServer {
 
             const metadata = this.storage.getTraceMetadata(traceId)
             const response = this.responseDetailMapper.map(trace, metadata)
+      const user = metadata?.user;
 
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify(response));
+            res.end(JSON.stringify({...response, user}));
             return;
 
         }
@@ -416,9 +418,11 @@ export default class DashboardServer {
                 return;
             }
 
+            const metadata = this.storage.getTraceMetadata(traceId);
+
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify(trace));
+            res.end(JSON.stringify({ ...trace, user: metadata?.user }));
             return;
         }
 
@@ -436,6 +440,7 @@ export default class DashboardServer {
                     durationMs: summary.durationMs,
                     startedAt: summary.startedAt,
                     hasError: summary.hasError,
+                    user: summary.user,
                 }));
 
             res.statusCode = 200

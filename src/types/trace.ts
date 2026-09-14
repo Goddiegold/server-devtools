@@ -1,13 +1,15 @@
 // src/core/trace.ts
 
+import { IDevToolsCurrentUser } from './misc';
 import type { IDevToolsSpan } from './span';
 
 export interface IDevToolsTrace {
-  traceId: string;
-  rootSpanId?: string;
-  spans: IDevToolsSpan[];
-  startedAt: number;
-  durationMs?: number;
+    traceId: string;
+    rootSpanId?: string;
+    spans: IDevToolsSpan[];
+    startedAt: number;
+    durationMs?: number;
+    user?: IDevToolsCurrentUser;
 }
 export interface ITraceMetadata {
     request?: {
@@ -17,6 +19,7 @@ export interface ITraceMetadata {
     response?: {
         body?: unknown;
     };
+    user?: IDevToolsCurrentUser;
 }
 
 export interface ITraceSummary {
@@ -29,4 +32,5 @@ export interface ITraceSummary {
     route?: string;
     statusCode?: number;
     hasError: boolean;
+    user?: IDevToolsCurrentUser;
 }

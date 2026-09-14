@@ -538,7 +538,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
           </section>
 
           <nav className="mt-6 flex gap-2 border-b pb-2 text-sm">
-            {["Overview", "Execution", "Request", "Response", "Error"].map((tab) => (
+            {["Overview", "Execution", "Request", "Response", "User", "Error"].map((tab) => (
               <Button
                 key={tab}
                 variant={activeTab === tab ? "secondary" : "ghost"}
@@ -605,6 +605,17 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
               {responseLoading && <p className="text-sm text-muted-foreground">Loading response data...</p>}
               {!responseLoading && responseError && <p className="text-sm text-destructive">{responseError}</p>}
               {!responseLoading && !responseError && response && <ResponseDetails response={response} />}
+            </section>
+          ) : activeTab === "User" ? (
+            <section className="mt-6 rounded-md border p-4">
+              <h2 className="mb-3 text-sm font-semibold">User</h2>
+              {trace.user ? (
+                <KeyValueRows values={trace.user} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No authenticated user captured for this request.
+                </p>
+              )}
             </section>
           ) : activeTab === "Error" ? (
             <section className="mt-6 rounded-md border p-4">

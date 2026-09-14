@@ -3,6 +3,7 @@ import http from 'node:http';
 
 import DashboardServer from '../src/dashboard/dashboard-server';
 import SQLiteStorage from '../src/storage/sqlite-storage';
+import AuthService from '../src/security/auth.service';
 import { IDevToolsTrace } from '../src/types';
 
 async function run() {
@@ -40,9 +41,14 @@ async function run() {
   };
   for (const span of trace.spans) storage.saveSpan(span);
   storage.saveTraceSummary(trace.spans[0]);
+  storage.saveCurrentUser('trace-123', {
+    id: 'user-123',
+    email: 'godwin@example.com',
+  });
 
   // 3. Start ServerDevTools' HTTP server
-  const dashboard = new DashboardServer(storage);
+  const authService = new AuthService('admin', 'test-password', storage);
+  const dashboard = new DashboardServer(storage, authService);
 
   const server = http.createServer((req, res) => {
     dashboard.handle(req, res);
@@ -56,11 +62,21 @@ async function run() {
 
   assert(address && typeof address !== 'string');
 
+  const sessionToken = authService.createSession('admin');
+  const apiFetch = (path: string, init?: RequestInit) => fetch(
+    `http://127.0.0.1:${address.port}${path}`,
+    {
+      ...init,
+      headers: {
+        ...init?.headers,
+        Cookie: `sdt_session=${sessionToken}`,
+      },
+    },
+  );
+
   try {
     // 4. Call the NEW endpoint we want to build
-    const response = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/requests`,
-    );
+    const response = await apiFetch('/_devtools/api/requests');
 
     assert.equal(response.status, 200);
 
@@ -77,39 +93,39 @@ async function run() {
         durationMs: 499,
         startedAt: 1000,
         hasError: false,
+        user: {
+          id: 'user-123',
+          email: 'godwin@example.com',
+        },
       },
     ]);
 
-    const traceResponse = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-123`,
-    );
+    const traceResponse = await apiFetch('/_devtools/api/traces/trace-123');
 
     assert.equal(traceResponse.status, 200);
     assert.deepEqual(
       await traceResponse.json(),
-      JSON.parse(JSON.stringify(storage.getTrace('trace-123'))),
+      {
+        ...JSON.parse(JSON.stringify(storage.getTrace('trace-123'))),
+        user: {
+          id: 'user-123',
+          email: 'godwin@example.com',
+        },
+      },
     );
 
-    const missingTraceResponse = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/traces/missing`,
-    );
+    const missingTraceResponse = await apiFetch('/_devtools/api/traces/missing');
 
     assert.equal(missingTraceResponse.status, 404);
     assert.deepEqual(await missingTraceResponse.json(), {
       message: 'Trace not found',
     });
 
-    const deleteResponse = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-123`,
-      { method: 'DELETE' },
-    );
+    const deleteResponse = await apiFetch('/_devtools/api/traces/trace-123', { method: 'DELETE' });
 
-    assert.equal(deleteResponse.status, 204);
+    assert.equal(deleteResponse.status, 200);
 
-    const deleteUnknownResponse = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/traces/missing`,
-      { method: 'DELETE' },
-    );
+    const deleteUnknownResponse = await apiFetch('/_devtools/api/traces/missing', { method: 'DELETE' });
 
     assert.equal(deleteUnknownResponse.status, 404);
 
@@ -149,9 +165,7 @@ async function run() {
     for (const span of executionTrace.spans) storage.saveSpan(span);
     storage.saveTraceSummary(executionTrace.spans[0]);
 
-    const executionResponse = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/traces/trace-execution/execution`
-    );
+    const executionResponse = await apiFetch('/_devtools/api/traces/trace-execution/execution');
 
     assert.equal(executionResponse.status, 200);
 
@@ -174,16 +188,11 @@ async function run() {
       "db-execution"
     );
 
-    const clearHistoryResponse = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/traces`,
-      { method: 'DELETE' },
-    );
+    const clearHistoryResponse = await apiFetch('/_devtools/api/traces', { method: 'DELETE' });
 
-    assert.equal(clearHistoryResponse.status, 204);
+    assert.equal(clearHistoryResponse.status, 200);
 
-    const requestsAfterClear = await fetch(
-      `http://127.0.0.1:${address.port}/_devtools/api/requests`,
-    );
+    const requestsAfterClear = await apiFetch('/_devtools/api/requests');
 
     assert.equal(requestsAfterClear.status, 200);
     assert.deepEqual(await requestsAfterClear.json(), []);

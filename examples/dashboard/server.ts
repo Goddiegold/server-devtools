@@ -38,6 +38,16 @@ async function bootstrap() {
   app.use((req, res, next) => {
     devtools.middleware(req, res, next)
   });
+  
+  app.use((req, res, next) => {
+    (req as any).user = {
+      id: "123",
+      email: "godwin@example.com",
+      role: "ADMIN",
+    };
+
+    next();
+  });
 
   app.use(express.json());
 

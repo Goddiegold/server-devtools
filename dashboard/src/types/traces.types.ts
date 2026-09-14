@@ -25,7 +25,10 @@ export interface IDevToolsTrace {
   spans: IDevToolsSpan[]
   startedAt: number
   durationMs?: number
+  user?: IDevToolsCurrentUser
 }
+
+export type IDevToolsCurrentUser = Record<string, unknown>
 
 export interface IExecutionNode {
   span: IDevToolsSpan

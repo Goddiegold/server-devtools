@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { IDevToolsSpan, IDevToolsTrace, ISession, ITraceMetadata, ITraceSummary } from "../types";
+import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 
 
@@ -57,7 +57,8 @@ export default class SQLiteStorage {
         CREATE TABLE IF NOT EXISTS trace_metadata (
             trace_id TEXT PRIMARY KEY,
             request_body TEXT,
-            response_body TEXT
+            response_body TEXT,
+            user_json TEXT
         );
 
        CREATE TABLE IF NOT EXISTS sessions (
@@ -67,6 +68,16 @@ export default class SQLiteStorage {
            expires_at INTEGER NOT NULL
        );
     `);
+
+        const traceColumns = this.db.prepare(`PRAGMA table_info(traces)`).all() as { name: string }[];
+        if (traceColumns.some(column => column.name === "user_json")) {
+            this.db.exec(`ALTER TABLE traces DROP COLUMN user_json`);
+        }
+
+        const metadataColumns = this.db.prepare(`PRAGMA table_info(trace_metadata)`).all() as { name: string }[];
+        if (!metadataColumns.some(column => column.name === "user_json")) {
+            this.db.exec(`ALTER TABLE trace_metadata ADD COLUMN user_json TEXT`);
+        }
     }
 
     saveSpan(span: IDevToolsSpan): void {
@@ -254,22 +265,22 @@ export default class SQLiteStorage {
     getTraceSummaries(): ITraceSummary[] {
         const statement = this.db.prepare(`
         SELECT
-            trace_id,
-            root_span_id,
-            started_at,
-            duration_ms,
-            method,
-            path,
-            route,
-            status_code,
-            has_error
-        FROM traces
+            t.*,
+            tm.user_json
+        FROM traces t
+        LEFT JOIN trace_metadata tm
+            ON tm.trace_id = t.trace_id
         ORDER BY started_at DESC
     `);
 
         const rows = statement.all();
 
-        return rows.map((row: any) => ({
+        return rows.map((row: any) => {
+            const userJson = row.user_json !== null
+                ? JSON.parse(row.user_json)
+                : undefined;
+
+            return {
             traceId: row.trace_id,
             rootSpanId: row.root_span_id ?? undefined,
             startedAt: row.started_at,
@@ -279,7 +290,13 @@ export default class SQLiteStorage {
             route: row.route ?? undefined,
             statusCode: row.status_code ?? undefined,
             hasError: row.has_error === 1,
-        }));
+            user: userJson !== undefined
+                ? this.encryptionService
+                    ? this.encryptionService.decryptData(userJson)
+                    : userJson
+                : undefined,
+            };
+        });
     }
 
     saveRequestBody(traceId: string, body: unknown): void {
@@ -328,7 +345,8 @@ export default class SQLiteStorage {
         const statement = this.db.prepare(`
         SELECT
             request_body,
-            response_body
+            response_body,
+            user_json
         FROM trace_metadata
         WHERE trace_id = ?
     `);
@@ -336,6 +354,7 @@ export default class SQLiteStorage {
         const row = statement.get(traceId) as {
             request_body: string | null;
             response_body: string | null;
+            user_json: string | null
         } | undefined;
 
         if (!row) {
@@ -348,6 +367,10 @@ export default class SQLiteStorage {
 
         const responseBody = row.response_body !== null
             ? JSON.parse(row.response_body)
+            : undefined;
+
+        const userJson = row.user_json !== null
+            ? JSON.parse(row.user_json)
             : undefined;
 
         return {
@@ -365,6 +388,11 @@ export default class SQLiteStorage {
                         ? this.encryptionService.decryptData(responseBody)
                         : responseBody,
                 }
+                : undefined,
+            user: userJson !== undefined
+                ? this.encryptionService
+                    ? this.encryptionService.decryptData(userJson)
+                    : userJson
                 : undefined,
         };
     }
@@ -391,7 +419,6 @@ export default class SQLiteStorage {
             this.db.exec("COMMIT");
         } catch (error) {
             this.db.exec("ROLLBACK");
-            ç
         }
     }
 
@@ -455,6 +482,27 @@ export default class SQLiteStorage {
             DELETE FROM sessions
             WHERE session_hash = ?
         `).run(sessionHash);
+    }
+
+    saveCurrentUser(
+        traceId: string,
+        user: IDevToolsCurrentUser,
+    ) {
+        const processedUser = this.encryptionService
+            ? this.encryptionService.encryptData(user)
+            : user;
+
+        const userJson = JSON.stringify(processedUser);
+
+        this.db.prepare(`
+        INSERT INTO trace_metadata (
+            trace_id,
+            user_json
+        )
+        VALUES (?, ?)
+        ON CONFLICT(trace_id) DO UPDATE SET
+            user_json = excluded.user_json
+    `).run(traceId, userJson);
     }
 
     close(): void {
