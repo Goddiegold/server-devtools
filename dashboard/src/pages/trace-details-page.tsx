@@ -16,6 +16,7 @@ import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialo
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ExecutionTree } from "@/components/execution-tree"
+import { DatabaseDetails } from "@/components/database-details"
 import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
 import { Loader2, Trash2 } from "lucide-react"
 
@@ -215,6 +216,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
   const [executionTree, setExecutionTree] = useState<IExecutionNode[] | null>(null)
   const [executionLoading, setExecutionLoading] = useState(false)
   const [executionError, setExecutionError] = useState<string | null>(null)
+  const [selectedSpan, setSelectedSpan] = useState<IDevToolsSpan | null>(null)
   const [request, setRequest] = useState<ITraceRequest | null>(null)
   const [requestLoading, setRequestLoading] = useState(false)
   const [requestError, setRequestError] = useState<string | null>(null)
@@ -282,6 +284,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
       setError(null)
       setExecutionTree(null)
       setExecutionError(null)
+      setSelectedSpan(null)
       setRequest(null)
       setRequestError(null)
       setResponse(null)
@@ -589,7 +592,16 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
               )}
 
               {!executionLoading && !executionError && executionTree && executionTree.length > 0 && (
-                <ExecutionTree nodes={executionTree} />
+                <>
+                  <ExecutionTree
+                    nodes={executionTree}
+                    selectedSpanId={selectedSpan?.spanId}
+                    onSelectSpan={setSelectedSpan}
+                  />
+                  {selectedSpan?.type === "database" && (
+                    <DatabaseDetails span={selectedSpan} />
+                  )}
+                </>
               )}
             </section>
           ) : activeTab === "Request" ? (

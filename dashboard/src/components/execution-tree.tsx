@@ -56,29 +56,58 @@ function spanTypeLabel(type: string) {
   }
 }
 
-function ExecutionTreeNode({ node, depth = 0 }: { node: IExecutionNode; depth?: number }) {
+interface ExecutionTreeProps {
+  nodes: IExecutionNode[]
+  selectedSpanId?: string
+  onSelectSpan?: (span: IExecutionNode["span"]) => void
+}
+
+function ExecutionTreeNode({
+  node,
+  depth = 0,
+  selectedSpanId,
+  onSelectSpan,
+}: Omit<ExecutionTreeProps, "nodes"> & { node: IExecutionNode; depth?: number }) {
   const hasError = Boolean(node.span.error) || node.span.status.code !== 0
   const typeLabel = spanTypeLabel(node.span.type)
+  const isDatabase = node.span.type === "database"
+  const isSelected = node.span.spanId === selectedSpanId
+  const row = (
+    <div
+      className={`flex items-center justify-between gap-4 rounded px-2 py-2 text-sm ${
+        isSelected
+          ? "bg-muted"
+          : hasError
+            ? "bg-destructive/10 text-destructive"
+            : "hover:bg-muted/40"
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
+        {typeLabel && (
+          <span className="shrink-0 text-[10px] tracking-wide text-muted-foreground">
+            {typeLabel}
+          </span>
+        )}
+      </div>
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">
+        {formatDuration(node.span.durationMs)}
+      </span>
+    </div>
+  )
 
   return (
     <div className={depth > 0 ? "ml-4 border-l border-border pl-4" : ""}>
-      <div
-        className={`flex items-center justify-between gap-4 rounded px-2 py-2 text-sm ${
-          hasError ? "bg-destructive/10 text-destructive" : "hover:bg-muted/40"
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
-          {typeLabel && (
-            <span className="shrink-0 text-[10px] tracking-wide text-muted-foreground">
-              {typeLabel}
-            </span>
-          )}
-        </div>
-        <span className="shrink-0 font-mono text-xs text-muted-foreground">
-          {formatDuration(node.span.durationMs)}
-        </span>
-      </div>
+      {isDatabase ? (
+        <button
+          type="button"
+          className="block w-full text-left"
+          aria-pressed={isSelected}
+          onClick={() => onSelectSpan?.(node.span)}
+        >
+          {row}
+        </button>
+      ) : row}
 
       {node.children.length > 0 && (
         <div>
@@ -87,6 +116,8 @@ function ExecutionTreeNode({ node, depth = 0 }: { node: IExecutionNode; depth?: 
               key={child.span.spanId}
               node={child}
               depth={depth + 1}
+              selectedSpanId={selectedSpanId}
+              onSelectSpan={onSelectSpan}
             />
           ))}
         </div>
@@ -95,11 +126,16 @@ function ExecutionTreeNode({ node, depth = 0 }: { node: IExecutionNode; depth?: 
   )
 }
 
-export function ExecutionTree({ nodes }: { nodes: IExecutionNode[] }) {
+export function ExecutionTree({ nodes, selectedSpanId, onSelectSpan }: ExecutionTreeProps) {
   return (
     <div className="space-y-1">
       {nodes.map((node) => (
-        <ExecutionTreeNode key={node.span.spanId} node={node} />
+        <ExecutionTreeNode
+          key={node.span.spanId}
+          node={node}
+          selectedSpanId={selectedSpanId}
+          onSelectSpan={onSelectSpan}
+        />
       ))}
     </div>
   )

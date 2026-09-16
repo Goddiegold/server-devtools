@@ -17,6 +17,7 @@ export default class ServerDevToolsExporter implements SpanExporter {
     ): void {
         try {
             for (const span of spans) {
+                console.log({ span })
                 const devToolsSpan = this.spanMapper.map(span);
 
                 this.storage.saveSpan(devToolsSpan);

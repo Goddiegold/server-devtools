@@ -1,16 +1,15 @@
-// import express from "express";
-
 import { Express } from "express";
+import { MongoClient } from "mongodb";
 import ServerDevTools from "../../src";
 
 async function bootstrap() {
   const devtools = new ServerDevTools({
     encryption: {
-      key: "K2I3QiRWSThQR2JWUHNbRXAmRXcuJChteVBCMDhCRTE="
+      key: "K2I3QiRWSThQR2JWUHNbRXAmRXcuJChteVBCMDhCRTE=",
     },
     auth: {
       username: "godwin",
-      password: "12345678"
+      password: "12345678",
     },
     getCurrentUser: (req) => {
       const user = (req as any).user;
@@ -27,19 +26,25 @@ async function bootstrap() {
     },
   });
 
-  // Start OpenTelemetry instrumentation BEFORE loading/starting
-  // the application.
+  // Instrumentation must start before MongoDB/Express are loaded.
   await devtools.start();
 
-  // const { default: express } = await import("express");
   const express = require("express");
+  const { MongoClient } = require("mongodb");
+
+  const mongoClient = new MongoClient("mongodb://localhost:27017");
+  await mongoClient.connect();
+
+  const db = mongoClient.db("server_devtools");
+  const users = db.collection("users");
+
   const app = express() as Express;
 
   app.use((req, res, next) => {
-    devtools.middleware(req, res, next)
+    devtools.middleware(req, res, next);
   });
-  
-  app.use((req, res, next) => {
+
+  app.use((req, _res, next) => {
     (req as any).user = {
       id: "123",
       email: "godwin@example.com",
@@ -52,25 +57,30 @@ async function bootstrap() {
   app.use(express.json());
 
   app.get("/users/:id", async (req, res) => {
-    const response = await fetch('https://example.com');
-
-    await response.text();
-    res.json({
+    const user = await users.findOne({
       id: req.params.id,
-      name: "John Doe",
+    });
+
+    const response = await fetch("https://example.com");
+    await response.text();
+
+    res.json({
+      user,
     });
   });
 
-  app.post("/users", (req, res) => {
-    res
-      .status(201)
-      .set({
-        "X-Test-Header": "server-devtools",
-        "X-Request-Source": "users-api",
-      })
-      .json({
-        received: req.body,
-      });
+  app.post("/users", async (req, res) => {
+    const user = {
+      ...req.body,
+      createdAt: new Date(),
+    };
+
+    const result = await users.insertOne(user);
+
+    res.status(201).json({
+      id: result.insertedId,
+      ...user,
+    });
   });
 
   app.get("/stream-test", (_req, res) => {
