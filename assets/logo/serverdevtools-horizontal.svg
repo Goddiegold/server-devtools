@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 140">
+<g transform="translate(12 6) scale(.9)">
 <g fill="none" stroke="#0F172A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
  <path d="M28 64H47"/><path d="M47 64C62 64 61 34 78 34H94"/>
  <path d="M47 64H94"/><path d="M47 64C62 64 61 94 78 94H94"/>
@@ -6,4 +7,6 @@
 <circle cx="24" cy="64" r="10" fill="#3B82F6"/>
 <circle cx="100" cy="34" r="10" fill="#3B82F6"/>
 <circle cx="100" cy="64" r="9" fill="#F8FAFC" stroke="#0F172A" stroke-width="7"/>
-<circle cx="100" cy="94" r="10" fill="#3B82F6"/></svg>
+<circle cx="100" cy="94" r="10" fill="#3B82F6"/></g>
+<text x="140" y="84" fill="#0F172A" font-family="Inter,Arial,sans-serif" font-size="48" font-weight="700">ServerDevTools</text>
+</svg>

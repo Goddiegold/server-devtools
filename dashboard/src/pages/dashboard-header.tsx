@@ -5,6 +5,7 @@ import { ApiError } from "@/api/client"
 import { logout } from "@/api/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import logoUrl from "../../../assets/logo/serverdevtools-icon.svg"
 
 interface DashboardHeaderProps {
   onLogout: () => void
@@ -39,7 +40,7 @@ export function DashboardHeader({ onLogout }: DashboardHeaderProps) {
 
   return (
     <header className="flex h-14 items-center justify-between border-b px-6">
-      <div className="font-semibold">ServerDevTools</div>
+      <div className="flex items-center gap-2 font-semibold"><img className="size-7" src={logoUrl} alt="" />ServerDevTools</div>
 
       <div className="flex items-center gap-3">
         {error && (

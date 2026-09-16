@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react"
-import { Eye, EyeOff, Loader2, LockKeyhole, SquareTerminal, UserRound } from "lucide-react"
+import { Eye, EyeOff, Loader2, LockKeyhole, UserRound } from "lucide-react"
 
 import { ApiError } from "@/api/client"
 import { login } from "@/api/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import logoUrl from "../../../assets/logo/serverdevtools-icon.svg"
 
 interface LoginPageProps {
   onLoginSuccess: () => void
@@ -45,9 +46,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     <main className="flex min-h-screen flex-col items-center justify-center bg-muted/20 px-4 py-10 text-foreground">
       <section className="w-full max-w-md">
         <div className="mb-7 flex items-center justify-center gap-2.5">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <SquareTerminal className="size-5" aria-hidden="true" />
-          </div>
+          <img className="size-9" src={logoUrl} alt="" />
           <span className="text-lg font-semibold tracking-tight">ServerDevTools</span>
         </div>
 
