@@ -11,7 +11,7 @@ import SQLiteStorage from "../storage/sqlite-storage";
 export class Instrumentation {
     private readonly oTelSdk: NodeSDK;
     constructor(
-      private readonly  storage: SQLiteStorage
+        private readonly storage: SQLiteStorage
     ) {
         this.oTelSdk = new NodeSDK({
             spanProcessors: [
@@ -34,11 +34,60 @@ export class Instrumentation {
                                     "user-agent",
                                 ]
                             },
+                            client: {
+                                requestHeaders: [
+                                    "content-type",
+                                    "authorization",
+                                    "x-test-header",
+                                ],
+                                responseHeaders: [
+                                    "content-type",
+                                    "x-test-response",
+                                ],
+                            },
                         },
                     }
                 ),
-                new UndiciInstrumentation(),
+                // new UndiciInstrumentation(),
                 // new ExpressInstrumentation(),
+                new UndiciInstrumentation({
+                    headersToSpanAttributes: {
+                        requestHeaders: [
+                            "content-type",
+                            "x-test-header",
+                        ],
+                        responseHeaders: [
+                            "content-type",
+                        ],
+                    },
+
+                    requestHook: (_span, request) => {
+                        console.log("UNDICI REQUEST:", {
+                            origin: request.origin,
+                            method: request.method,
+                            path: request.path,
+                            headers: request.headers,
+                            contentLength: request.contentLength,
+                            contentType: request.contentType,
+                            body: request.body,
+                        });
+                    },
+
+                    responseHook: (_span, { request, response }) => {
+                        console.log("UNDICI RESPONSE:", {
+                            request: {
+                                origin: request.origin,
+                                method: request.method,
+                                path: request.path,
+                            },
+                            response: {
+                                statusCode: response.statusCode,
+                                statusText: response.statusText,
+                                headers: response.headers,
+                            },
+                        });
+                    },
+                }),
                 new ExpressInstrumentation({
                     requestHook: (span, info) => {
                         if (info.layerType === ExpressLayerType.REQUEST_HANDLER) {
