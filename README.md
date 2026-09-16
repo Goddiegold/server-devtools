@@ -132,6 +132,9 @@ async function bootstrap() {
 bootstrap();
 ```
 
+OpenTelemetry and outbound fetch capture start when `devtools.start()` is
+called; constructing the instance alone does not wrap `globalThis.fetch`.
+
 Then open:
 
 ``` text

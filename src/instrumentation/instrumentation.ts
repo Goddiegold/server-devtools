@@ -18,12 +18,8 @@ export class Instrumentation {
     constructor(
         private readonly storage: SQLiteStorage
     ) {
-        process.env.OTEL_METRICS_EXPORTER = "none";
-
         this.outboundHttpCapture =
             new OutboundHttpCapture(storage);
-
-        this.outboundHttpCapture.startFetchCapture();
 
         this.oTelSdk = new NodeSDK({
             spanProcessors: [
@@ -137,6 +133,7 @@ export class Instrumentation {
     async start() {
         debugLog("Starting OpenTelemetry SDK");
         await this.oTelSdk.start();
+        this.outboundHttpCapture.startFetchCapture();
         debugLog("OpenTelemetry SDK started");
     }
 
