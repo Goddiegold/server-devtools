@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react"
+
+import { getHttpClientDetails, type IHttpClientDetails } from "@/api/execution"
 import type { IDevToolsSpan } from "@/types"
 
 function attributeString(span: IDevToolsSpan, key: string) {
@@ -25,6 +28,65 @@ function KeyValueRows({ values }: { values: Record<string, string> }) {
   )
 }
 
+function formatValue(value: unknown) {
+  if (typeof value === "string") {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2)
+    } catch {
+      return value
+    }
+  }
+
+  const formatted = JSON.stringify(value, null, 2)
+  return formatted === undefined ? String(value) : formatted
+}
+
+function formatHeaders(headers: Record<string, string | string[]> | undefined) {
+  return headers
+    ? Object.fromEntries(
+        Object.entries(headers).map(([key, value]) => [
+          key,
+          typeof value === "string" ? value : JSON.stringify(value),
+        ])
+      )
+    : {}
+}
+
+function CaptureSection({
+  title,
+  headers,
+  body,
+}: {
+  title: string
+  headers?: Record<string, string | string[]>
+  body?: unknown
+}) {
+  const formattedHeaders = formatHeaders(headers)
+  const hasBody = body !== undefined
+
+  if (Object.keys(formattedHeaders).length === 0 && !hasBody) {
+    return null
+  }
+
+  return (
+    <section>
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h4>
+      <div className="space-y-3">
+        {Object.keys(formattedHeaders).length > 0 && (
+          <KeyValueRows values={formattedHeaders} />
+        )}
+        {hasBody && (
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border p-3 font-mono text-xs">
+            {formatValue(body)}
+          </pre>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function DetailSection({ title, values }: { title: string; values: Record<string, string> }) {
   if (Object.keys(values).length === 0) {
     return null
@@ -40,7 +102,46 @@ function DetailSection({ title, values }: { title: string; values: Record<string
   )
 }
 
-export function HttpClientDetails({ span }: { span: IDevToolsSpan }) {
+export function HttpClientDetails({
+  traceId,
+  span,
+}: {
+  traceId: string
+  span: IDevToolsSpan
+}) {
+  const [details, setDetails] = useState<IHttpClientDetails | null>(null)
+  const [detailsLoading, setDetailsLoading] = useState(true)
+  const [detailsError, setDetailsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+
+    void getHttpClientDetails(traceId, span.spanId)
+      .then((data) => {
+        if (active) {
+          setDetails(data.details ?? null)
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setDetailsError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load HTTP client details"
+          )
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setDetailsLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [span.spanId, traceId])
+
   const request = definedValues([
     ["Method", attributeString(span, "http.request.method")],
     ["URL", attributeString(span, "url.full")],
@@ -74,6 +175,29 @@ export function HttpClientDetails({ span }: { span: IDevToolsSpan }) {
       <DetailSection title="Server" values={server} />
       <DetailSection title="Network" values={network} />
       <DetailSection title="URL" values={url} />
+
+      {detailsLoading && (
+        <p className="text-sm text-muted-foreground">
+          Loading HTTP client details...
+        </p>
+      )}
+      {!detailsLoading && detailsError && (
+        <p className="text-sm text-destructive">{detailsError}</p>
+      )}
+      {!detailsLoading && !detailsError && details && (
+        <>
+          <CaptureSection
+            title="Request"
+            headers={details.requestHeaders}
+            body={details.requestBody}
+          />
+          <CaptureSection
+            title="Response"
+            headers={details.responseHeaders}
+            body={details.responseBody}
+          />
+        </>
+      )}
 
       {span.error && (Object.keys(error).length > 0 || span.error.stack) && (
         <section>

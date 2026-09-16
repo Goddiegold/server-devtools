@@ -603,7 +603,11 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                     <DatabaseDetails span={selectedSpan} />
                   )}
                   {selectedSpan?.type === "http.client" && (
-                    <HttpClientDetails span={selectedSpan} />
+                    <HttpClientDetails
+                      key={`${traceId}:${selectedSpan.spanId}`}
+                      traceId={traceId}
+                      span={selectedSpan}
+                    />
                   )}
                 </>
               )}

@@ -398,6 +398,90 @@ export default class DashboardServer {
 
         }
 
+        if (
+            req.method === Config.REQUEST_METHOD.GET &&
+            pathname.startsWith(`${Config.DASHBOARD_API_ROUTES.TRACES}/`)
+        ) {
+            const prefix = `${Config.DASHBOARD_API_ROUTES.TRACES}/`;
+            const segments = pathname.slice(prefix.length).split("/");
+
+            if (segments[1] === "http-client") {
+                let traceId: string;
+                let spanId: string;
+
+                if (segments.length !== 3) {
+                    res.statusCode = 400;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({
+                        message: "Trace and span identifiers are required",
+                    }));
+                    return;
+                }
+
+                try {
+                    traceId = decodeURIComponent(segments[0]);
+                    spanId = decodeURIComponent(segments[2]);
+                } catch {
+                    res.statusCode = 400;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({
+                        message: "Invalid trace or span identifier",
+                    }));
+                    return;
+                }
+
+                if (!traceId || !spanId) {
+                    res.statusCode = 400;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({
+                        message: "Trace and span identifiers are required",
+                    }));
+                    return;
+                }
+
+                const trace = this.storage.getTrace(traceId);
+
+                if (!trace) {
+                    res.statusCode = 404;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({
+                        message: "Trace not found",
+                    }));
+                    return;
+                }
+
+                const span = trace.spans.find(candidate => candidate.spanId === spanId);
+
+                if (!span) {
+                    res.statusCode = 404;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({
+                        message: "Span not found",
+                    }));
+                    return;
+                }
+
+                if (span.type !== "http.client") {
+                    res.statusCode = 400;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({
+                        message: "Span is not an HTTP client span",
+                    }));
+                    return;
+                }
+
+                const details = this.storage.getHttpClientDetails(spanId);
+
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    span,
+                    ...(details ? { details } : {}),
+                }));
+                return;
+            }
+        }
+
 
         if (
             req.method === Config.REQUEST_METHOD.GET &&
