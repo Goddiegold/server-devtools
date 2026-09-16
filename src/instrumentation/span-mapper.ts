@@ -1,5 +1,5 @@
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
-import { IDevToolsSpan, DevToolsSpanType } from "../types";
+import { IDevToolsSpan, IDevToolsSpanType } from "../types";
 import { SpanKind } from "@opentelemetry/api";
 
 
@@ -45,7 +45,7 @@ export default class SpanMapper {
         }
     }
 
-    private getType(span: ReadableSpan): DevToolsSpanType {
+    private getType(span: ReadableSpan): IDevToolsSpanType {
         if (span.attributes['db.system.name']) {
             return 'database';
         }

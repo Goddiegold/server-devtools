@@ -148,10 +148,10 @@ export class OutboundHttpCapture {
   }
 
   private parseBody(
-    body: Buffer,
-    contentType: string | string[] | number | undefined,
+    body: Buffer | string,
+    contentType: string | string[] | number | null | undefined,
   ): unknown {
-    const rawBody = body.toString("utf8");
+    const rawBody = typeof body === "string" ? body : body.toString("utf8");
 
     const normalizedContentType = Array.isArray(contentType)
       ? contentType.join(";")

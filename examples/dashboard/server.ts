@@ -1,4 +1,5 @@
 import { Express } from "express";
+import type { IncomingMessage } from "node:http";
 
 import ServerDevTools from "../../src";
 
@@ -177,10 +178,10 @@ async function bootstrap() {
             "x-another-header": "another-value",
           },
         },
-        (response) => {
+        (response: IncomingMessage) => {
           const chunks: Buffer[] = [];
 
-          response.on("data", (chunk) => {
+          response.on("data", (chunk: Buffer) => {
             chunks.push(Buffer.from(chunk));
           });
 

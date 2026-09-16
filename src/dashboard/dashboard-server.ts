@@ -100,7 +100,10 @@ export default class DashboardServer {
 
     private async handleLogin(req: IncomingMessage,
         res: ServerResponse) {
-        const body = await this.readJsonBody(req);
+        const body = await this.readJsonBody(req) as {
+            username?: string;
+            password?: string;
+        } | null;
 
         const username = body?.username || null
         const password = body?.password || null

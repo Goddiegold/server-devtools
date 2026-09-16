@@ -72,7 +72,7 @@ class ServerDevTools {
         const traceId = activeSpan?.spanContext().traceId;
 
         if (traceId) {
-            const chunks = []
+            const chunks: unknown[] = []
 
             debugLog("Attached inbound response capture", { traceId });
 
@@ -80,7 +80,7 @@ class ServerDevTools {
 
             const originalWriteFunc = res.write;
 
-            res.write = function (...args) {
+            res.write = (function (this: ServerResponse, ...args: Parameters<typeof originalWriteFunc>) {
                 const chunk = args[0];
 
 
@@ -92,10 +92,10 @@ class ServerDevTools {
                 }
 
                 return originalWriteFunc.apply(this, args);
-            };
+            }) as typeof res.write;
 
             const originalEndFunc = res.end;
-            res.end = function (...args) {
+            res.end = (function (this: ServerResponse, ...args: Parameters<typeof originalEndFunc>) {
                 const chunk = args[0];
 
                 if (Buffer.isBuffer(chunk)) {
@@ -122,7 +122,7 @@ class ServerDevTools {
 
                 storage.saveResponseBody(traceId, body)
                 return originalEndFunc.apply(this, args);
-            };
+            }) as typeof res.end;
 
             if (this.getCurrentUser) {
                 res.once("finish", () => {

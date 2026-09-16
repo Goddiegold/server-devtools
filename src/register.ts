@@ -1,7 +1,12 @@
 import ServerDevTools from ".";
 
 
-const serverDevTools = new ServerDevTools();
+const serverDevTools = new ServerDevTools({
+    auth: {
+        username: process.env.SERVER_DEVTOOLS_USERNAME ?? "",
+        password: process.env.SERVER_DEVTOOLS_PASSWORD ?? "",
+    },
+});
 
 serverDevTools.start();
 
