@@ -2,6 +2,7 @@ import { ExportResult, ExportResultCode } from "@opentelemetry/core";
 import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-node";
 import SpanMapper from "./span-mapper";
 import SQLiteStorage from "../storage/sqlite-storage";
+import { debugLog } from "../utils/logger";
 
 
 export default class ServerDevToolsExporter implements SpanExporter {
@@ -17,7 +18,6 @@ export default class ServerDevToolsExporter implements SpanExporter {
     ): void {
         try {
             for (const span of spans) {
-                // console.log({ span })
                 const devToolsSpan = this.spanMapper.map(span);
 
                 this.storage.saveSpan(devToolsSpan);
@@ -31,6 +31,10 @@ export default class ServerDevToolsExporter implements SpanExporter {
                 code: ExportResultCode.SUCCESS,
             });
         } catch (error) {
+            debugLog("Span export failed", {
+                spanCount: spans.length,
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
             resultCallback({
                 code: ExportResultCode.FAILED,
                 error: error instanceof Error

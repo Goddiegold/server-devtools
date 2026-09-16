@@ -1,5 +1,8 @@
 
 export default {
+    get SERVER_DEVTOOLS_DEBUG() {
+        return process.env.SERVER_DEVTOOLS_DEBUG === 'true';
+    },
     DASHBOARD_API_ROUTES: {
         TRACES: '/_devtools/api/traces',
         REQUESTS: '/_devtools/api/requests',

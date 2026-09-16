@@ -3,11 +3,12 @@ import { UndiciInstrumentation } from "@opentelemetry/instrumentation-undici";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import ServerDevToolsExporter from "./exporter";
-import { ExpressInstrumentation, ExpressLayerType } from "@opentelemetry/instrumentation-express";
+import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
 import SQLiteStorage from "../storage/sqlite-storage";
 import { OutboundHttpCapture } from "./outbound-http/outbound-http-capture";
 import { ClientRequest, IncomingMessage } from "node:http";
+import { debugLog } from "../utils/logger";
 
 
 export class Instrumentation {
@@ -93,11 +94,10 @@ export class Instrumentation {
                         ],
                     },
 
-                    requestHook: (span, request) => {
-                        console.log("UNDICI REQUEST HOOK", {
+                    requestHook: (span, _request) => {
+                        debugLog("Undici outbound request", {
                             spanId: span.spanContext().spanId,
                             traceId: span.spanContext().traceId,
-                            request,
                         });
                         this.outboundHttpCapture.associateFetchSpan(
                             span.spanContext().spanId,
@@ -105,19 +105,15 @@ export class Instrumentation {
                     },
 
                     responseHook: (span, responseInfo) => {
-                        console.log("UNDICI RESPONSE HOOK", {
+                        debugLog("Undici outbound response", {
                             spanId: span.spanContext().spanId,
                             traceId: span.spanContext().traceId,
-                            responseInfo,
+                            statusCode: responseInfo.response.statusCode,
                         });
                     },
                 }),
                 new ExpressInstrumentation({
                     requestHook: (span, info) => {
-                        if (info.layerType === ExpressLayerType.REQUEST_HANDLER) {
-                            // console.log("DEVTOOLS REQUEST BODY:", info.request.body);
-                        }
-
                         if (info.request.body === undefined) {
                             return;
                         }
@@ -139,11 +135,15 @@ export class Instrumentation {
     }
 
     async start() {
+        debugLog("Starting OpenTelemetry SDK");
         await this.oTelSdk.start();
+        debugLog("OpenTelemetry SDK started");
     }
 
     async shutdown() {
+        debugLog("Shutting down OpenTelemetry SDK");
         await this.oTelSdk.shutdown();
         this.storage.close();
+        debugLog("OpenTelemetry SDK shut down");
     }
 }

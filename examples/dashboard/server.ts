@@ -1,7 +1,6 @@
 import { Express } from "express";
 
 import ServerDevTools from "../../src";
-import { trace } from "@opentelemetry/api";
 
 async function bootstrap() {
   const devtools = new ServerDevTools({
@@ -29,29 +28,6 @@ async function bootstrap() {
 
   // Instrumentation must start before MongoDB/Express/HTTP are loaded.
   await devtools.start();
-
-  const originalFetch = globalThis.fetch;
-
-  globalThis.fetch = async function (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ): Promise<Response> {
-    const beforeSpan = trace.getActiveSpan();
-
-    console.log("FETCH BEFORE", {
-      activeSpanId: beforeSpan?.spanContext().spanId,
-    });
-
-    const response = await originalFetch(input, init);
-
-    const afterSpan = trace.getActiveSpan();
-
-    console.log("FETCH AFTER", {
-      activeSpanId: afterSpan?.spanContext().spanId,
-    });
-
-    return response;
-  };
 
   const express = require("express");
   const { MongoClient } = require("mongodb");
@@ -105,8 +81,6 @@ async function bootstrap() {
   });
 
   app.post("/external-test", (req, res) => {
-    console.log("SERVER RECEIVED BODY:", req.body);
-
     res.setHeader(
       "x-test-response",
       "hello-from-server",
@@ -211,11 +185,6 @@ async function bootstrap() {
           });
 
           response.once("end", () => {
-            console.log(
-              "APPLICATION RECEIVED RESPONSE:",
-              Buffer.concat(chunks).toString("utf8"),
-            );
-
             resolve();
           });
         },

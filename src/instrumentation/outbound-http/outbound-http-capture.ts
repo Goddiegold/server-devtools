@@ -1,6 +1,7 @@
 import { ClientRequest, IncomingMessage } from "node:http";
 import SQLiteStorage from "../../storage/sqlite-storage";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { debugLog } from "../../utils/logger";
 interface FetchCaptureContext {
   spanId?: string;
 }
@@ -18,6 +19,11 @@ export class OutboundHttpCapture {
     spanId: string,
     request: ClientRequest,
   ): void {
+    debugLog("Native HTTP request capture started", {
+      spanId,
+      method: request.method,
+      path: request.path.split("?")[0],
+    });
     this.captureNativeRequestHeaders(spanId, request);
     this.captureNativeRequestBody(spanId, request);
   }
@@ -26,6 +32,10 @@ export class OutboundHttpCapture {
     spanId: string,
     response: IncomingMessage,
   ): void {
+    debugLog("Native HTTP response capture started", {
+      spanId,
+      statusCode: response.statusCode,
+    });
     this.captureNativeResponseHeaders(spanId, response);
     this.captureNativeResponseBody(spanId, response);
   }
@@ -163,16 +173,19 @@ export class OutboundHttpCapture {
 
   startFetchCapture(): void {
     if (this.originalFetch) {
+      debugLog("Fetch capture already active; skipping duplicate installation");
       return;
     }
 
     const originalFetch = globalThis.fetch;
 
     if (!originalFetch) {
+      debugLog("Fetch capture unavailable; global fetch is missing");
       return;
     }
 
     this.originalFetch = originalFetch;
+    debugLog("Fetch capture installed");
 
     globalThis.fetch = async (
       input: string | URL | Request,
@@ -189,6 +202,7 @@ export class OutboundHttpCapture {
         const spanId = context.spanId;
 
         if (!spanId) {
+          debugLog("Fetch capture skipped; no outbound span was associated");
           return response;
         }
 
@@ -206,10 +220,12 @@ export class OutboundHttpCapture {
     const context = this.fetchContext.getStore();
 
     if (!context) {
+      debugLog("Fetch span association skipped; no active fetch context", { spanId });
       return;
     }
 
     context.spanId = spanId;
+    debugLog("Fetch span associated", { spanId });
   }
 
   private async captureFetchRequest(
@@ -235,6 +251,7 @@ export class OutboundHttpCapture {
       requestHeaders,
       requestBody,
     });
+    debugLog("Fetch request details captured", { spanId });
   }
 
   private async captureFetchResponse(
@@ -259,6 +276,10 @@ export class OutboundHttpCapture {
     this.storage.updateHttpClientDetails(spanId, {
       responseHeaders,
       responseBody,
+    });
+    debugLog("Fetch response details captured", {
+      spanId,
+      statusCode: response.status,
     });
   }
 

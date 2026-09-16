@@ -11,10 +11,6 @@ export default class DashboardRequestDetailMapper {
             throw new Error(`Http server root span not found for trace ${trace.traceId}`);
         }
 
-        console.log({
-            rootSpanAttributes: rootSpan.attributes['http.server']
-        })
-
         return {
             method: String(rootSpan.attributes['http.request.method'] ?? "UNKNOWN"),
             path: String(rootSpan.attributes['url.path'] ?? ""),

@@ -6,11 +6,6 @@ import { SpanKind } from "@opentelemetry/api";
 export default class SpanMapper {
 
     map(span: ReadableSpan): IDevToolsSpan {
-        console.log("RAW OTEL SPAN", {
-            name: span.name,
-            attributes: span.attributes,
-        });
-
         const context = span.spanContext();
 
         const exceptionEvent = span?.events?.find(

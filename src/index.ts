@@ -9,6 +9,7 @@ import SQLiteStorage from "./storage/sqlite-storage";
 import EncryptDecryptService from "./security/encrypt-decrypt.service";
 import Config from "./config";
 import AuthService from "./security/auth.service";
+import { debugLog } from "./utils/logger";
 
 class ServerDevTools {
     private instrumentation: Instrumentation;
@@ -73,7 +74,7 @@ class ServerDevTools {
         if (traceId) {
             const chunks = []
 
-            console.log("ACTIVE TRACE ID:", traceId);
+            debugLog("Attached inbound response capture", { traceId });
 
             const storage = this.storage
 
@@ -85,17 +86,8 @@ class ServerDevTools {
 
                 if (Buffer.isBuffer(chunk)) {
                     const pureText = chunk.toString("utf8")
-                    console.log(
-                        "RESPONSE BODY (res.write):",
-                        pureText
-                    );
                     chunks.push(pureText)
                 } else {
-                    console.log(
-                        "RESPONSE BODY (res.write):",
-                        chunk
-                    );
-
                     chunks.push(chunk)
                 }
 
@@ -109,18 +101,8 @@ class ServerDevTools {
                 if (Buffer.isBuffer(chunk)) {
                     const pureText = chunk.toString("utf8")
 
-                    console.log(
-                        "RESPONSE BODY (res.end):",
-                        pureText
-                    );
-
                     chunks.push(pureText)
                 } else if (typeof chunk === "string") {
-                    console.log(
-                        "RESPONSE BODY (res.end):",
-                        chunk
-                    );
-
                     chunks.push(chunk)
                 }
 
@@ -148,7 +130,10 @@ class ServerDevTools {
                         const user = this.getCurrentUser?.(req);
                         this.storage.saveCurrentUser(traceId, user!)
                     } catch (error) {
-                        console.error("Failed to resolve current user:", error);
+                        debugLog("Current user capture failed", {
+                            traceId,
+                            errorName: error instanceof Error ? error.name : typeof error,
+                        });
                     }
                 });
             }
