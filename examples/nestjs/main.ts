@@ -1,19 +1,32 @@
 import 'reflect-metadata';
 
-import { NestFactory } from '@nestjs/core';
+import ServerDevTools from '../../src';
 
-import { AppModule } from './app.module';
-import { connectMongo } from './mongo';
+const devtools = new ServerDevTools({
+  auth: {
+    username: 'admin',
+    password: 'admin',
+  },
+});
 
 async function bootstrap() {
+  await devtools.start();
+
+  const { NestFactory } = await import('@nestjs/core');
+  const { AppModule } = await import('./app.module');
+  const { connectMongo } = await import('./mongo');
+
   await connectMongo();
+
   const app = await NestFactory.create(AppModule);
 
-  await app.listen(3434);
+  app.use((req, res, next) => {
+    devtools.middleware(req, res, next);
+  });
 
-  console.log(
-    'NestJS example running at http://localhost:3434',
-  );
+  await app.listen(3000);
+
+  console.log('NestJS example running at http://localhost:3000');
 }
 
 bootstrap();

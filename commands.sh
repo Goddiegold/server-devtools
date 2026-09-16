@@ -39,3 +39,19 @@ curl -c cookies.txt \
   -X POST http://localhost:3000/_devtools/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"godwin","password":"12345678"}'
+
+
+  # 1. Basic NestJS request
+curl http://localhost:3000/users/hello
+
+# 2. Error capture
+curl http://localhost:3000/users/broken
+
+# 3. MongoDB
+curl http://localhost:3000/users/mongo/123
+
+# 4. Outbound fetch
+curl http://localhost:3000/users/fetch
+
+# 5. MongoDB + outbound fetch
+curl http://localhost:3000/users/combined/123
