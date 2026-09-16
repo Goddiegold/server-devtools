@@ -22,6 +22,8 @@ export class Instrumentation {
         this.outboundHttpCapture =
             new OutboundHttpCapture(storage);
 
+        this.outboundHttpCapture.startFetchCapture();
+
         this.oTelSdk = new NodeSDK({
             spanProcessors: [
                 new SimpleSpanProcessor(new ServerDevToolsExporter(this.storage)),
@@ -97,6 +99,9 @@ export class Instrumentation {
                             traceId: span.spanContext().traceId,
                             request,
                         });
+                        this.outboundHttpCapture.associateFetchSpan(
+                            span.spanContext().spanId,
+                        );
                     },
 
                     responseHook: (span, responseInfo) => {

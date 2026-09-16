@@ -151,6 +151,46 @@ async function bootstrap() {
     res.json(data);
   });
 
+  app.get("/fetch-concurrent-test", async (_req, res) => {
+  const responses = await Promise.all([
+    fetch("http://localhost:3000/external-test", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        request: "A",
+      }),
+    }),
+
+    fetch("http://localhost:3000/external-test", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        request: "B",
+      }),
+    }),
+
+    fetch("http://localhost:3000/external-test", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        request: "C",
+      }),
+    }),
+  ]);
+
+  const data = await Promise.all(
+    responses.map((response) => response.json()),
+  );
+
+  res.json(data);
+});
+
   function testNativeHttpRequest() {
     return new Promise<void>((resolve, reject) => {
       const request = http.request(

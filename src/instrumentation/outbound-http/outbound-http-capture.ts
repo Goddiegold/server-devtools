@@ -1,10 +1,18 @@
 import { ClientRequest, IncomingMessage } from "node:http";
 import SQLiteStorage from "../../storage/sqlite-storage";
-
+import { AsyncLocalStorage } from "node:async_hooks";
+interface FetchCaptureContext {
+  spanId?: string;
+}
 export class OutboundHttpCapture {
+  private readonly fetchContext =
+    new AsyncLocalStorage<FetchCaptureContext>();
+
+  private originalFetch?: typeof globalThis.fetch;
+
   constructor(
     private readonly storage: SQLiteStorage,
-  ) {}
+  ) { }
 
   trackNativeRequest(
     spanId: string,
@@ -151,5 +159,118 @@ export class OutboundHttpCapture {
     }
 
     return rawBody;
+  }
+
+  startFetchCapture(): void {
+    if (this.originalFetch) {
+      return;
+    }
+
+    const originalFetch = globalThis.fetch;
+
+    if (!originalFetch) {
+      return;
+    }
+
+    this.originalFetch = originalFetch;
+
+    globalThis.fetch = async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const request = new Request(input, init);
+      const requestClone = request.clone();
+
+      const context: FetchCaptureContext = {};
+
+      return this.fetchContext.run(context, async () => {
+        const response = await originalFetch(request);
+
+        const spanId = context.spanId;
+
+        if (!spanId) {
+          return response;
+        }
+
+        const responseClone = response.clone();
+
+        await this.captureFetchRequest(spanId, requestClone);
+        await this.captureFetchResponse(spanId, responseClone);
+
+        return response;
+      });
+    };
+  }
+
+  associateFetchSpan(spanId: string): void {
+    const context = this.fetchContext.getStore();
+
+    if (!context) {
+      return;
+    }
+
+    context.spanId = spanId;
+  }
+
+  private async captureFetchRequest(
+    spanId: string,
+    request: Request,
+  ): Promise<void> {
+    const requestHeaders = this.normalizeFetchHeaders(
+      request.headers,
+    );
+
+    let requestBody: unknown;
+
+    if (request.body) {
+      const body = await request.text();
+
+      requestBody = this.parseBody(
+        body,
+        request.headers.get("content-type"),
+      );
+    }
+
+    this.storage.updateHttpClientDetails(spanId, {
+      requestHeaders,
+      requestBody,
+    });
+  }
+
+  private async captureFetchResponse(
+    spanId: string,
+    response: Response,
+  ): Promise<void> {
+    const responseHeaders = this.normalizeFetchHeaders(
+      response.headers,
+    );
+
+    let responseBody: unknown;
+
+    if (response.body) {
+      const body = await response.text();
+
+      responseBody = this.parseBody(
+        body,
+        response.headers.get("content-type"),
+      );
+    }
+
+    this.storage.updateHttpClientDetails(spanId, {
+      responseHeaders,
+      responseBody,
+    });
+  }
+
+  private normalizeFetchHeaders(
+    headers: Headers,
+  ): Record<string, string | string[]> {
+    const result: Record<string, string | string[]> = {};
+
+    headers.forEach((value, key) => {
+      result[key] = value;
+    });
+
+    return result;
   }
 }
