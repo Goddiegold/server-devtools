@@ -6,13 +6,20 @@ import ServerDevToolsExporter from "./exporter";
 import { ExpressInstrumentation, ExpressLayerType } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
 import SQLiteStorage from "../storage/sqlite-storage";
+import { OutboundHttpCapture } from "./outbound-http/outbound-http-capture";
+import { ClientRequest, IncomingMessage } from "node:http";
 
 
 export class Instrumentation {
     private readonly oTelSdk: NodeSDK;
+    private readonly outboundHttpCapture: OutboundHttpCapture;
+
     constructor(
         private readonly storage: SQLiteStorage
     ) {
+        this.outboundHttpCapture =
+            new OutboundHttpCapture(storage);
+
         this.oTelSdk = new NodeSDK({
             spanProcessors: [
                 new SimpleSpanProcessor(new ServerDevToolsExporter(this.storage)),
@@ -71,6 +78,14 @@ export class Instrumentation {
                             contentType: request.contentType,
                             body: request.body,
                         });
+
+                        if (!(request instanceof ClientRequest)) {
+                            return;
+                        }
+                        this.outboundHttpCapture.trackNativeRequest(
+                            _span.spanContext().spanId,
+                            request,
+                        );
                     },
 
                     responseHook: (_span, { request, response }) => {
@@ -86,6 +101,15 @@ export class Instrumentation {
                                 headers: response.headers,
                             },
                         });
+
+                        if (!(response instanceof IncomingMessage)) {
+                            return;
+                        }
+
+                        this.outboundHttpCapture.trackNativeResponse(
+                            _span.spanContext().spanId,
+                            response,
+                        );
                     },
                 }),
                 new ExpressInstrumentation({
@@ -110,6 +134,7 @@ export class Instrumentation {
                 }),
             ],
         });
+
 
     }
 

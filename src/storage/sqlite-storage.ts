@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, ISession, ITraceMetadata, ITraceSummary } from "../types";
+import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 
 
@@ -67,6 +67,14 @@ export default class SQLiteStorage {
            created_at INTEGER NOT NULL,
            expires_at INTEGER NOT NULL
        );
+
+       CREATE TABLE IF NOT EXISTS http_client_details (
+           span_id TEXT PRIMARY KEY,
+           request_headers TEXT,
+           request_body TEXT,
+           response_headers TEXT,
+           response_body TEXT
+       );
     `);
 
         const traceColumns = this.db.prepare(`PRAGMA table_info(traces)`).all() as { name: string }[];
@@ -78,6 +86,22 @@ export default class SQLiteStorage {
         if (!metadataColumns.some(column => column.name === "user_json")) {
             this.db.exec(`ALTER TABLE trace_metadata ADD COLUMN user_json TEXT`);
         }
+    }
+
+    private deserializeSensitiveValue<T>(value: string): T {
+        const parsed = JSON.parse(value);
+
+        return this.encryptionService
+            ? (this.encryptionService.decryptData(parsed) as T)
+            : (parsed as T);
+    }
+
+    private serializeSensitiveValue(value: unknown): string {
+        const encrypted = this.encryptionService
+            ? this.encryptionService.encryptData(value)
+            : value;
+
+        return JSON.stringify(encrypted);
     }
 
     saveSpan(span: IDevToolsSpan): void {
@@ -281,20 +305,20 @@ export default class SQLiteStorage {
                 : undefined;
 
             return {
-            traceId: row.trace_id,
-            rootSpanId: row.root_span_id ?? undefined,
-            startedAt: row.started_at,
-            durationMs: row.duration_ms ?? undefined,
-            method: row.method ?? undefined,
-            path: row.path ?? undefined,
-            route: row.route ?? undefined,
-            statusCode: row.status_code ?? undefined,
-            hasError: row.has_error === 1,
-            user: userJson !== undefined
-                ? this.encryptionService
-                    ? this.encryptionService.decryptData(userJson)
-                    : userJson
-                : undefined,
+                traceId: row.trace_id,
+                rootSpanId: row.root_span_id ?? undefined,
+                startedAt: row.started_at,
+                durationMs: row.duration_ms ?? undefined,
+                method: row.method ?? undefined,
+                path: row.path ?? undefined,
+                route: row.route ?? undefined,
+                statusCode: row.status_code ?? undefined,
+                hasError: row.has_error === 1,
+                user: userJson !== undefined
+                    ? this.encryptionService
+                        ? this.encryptionService.decryptData(userJson)
+                        : userJson
+                    : undefined,
             };
         });
     }
@@ -503,6 +527,130 @@ export default class SQLiteStorage {
         ON CONFLICT(trace_id) DO UPDATE SET
             user_json = excluded.user_json
     `).run(traceId, userJson);
+    }
+
+    updateHttpClientDetails(
+        spanId: string,
+        details: Partial<Omit<IHttpClientDetails, "spanId">>,
+    ): void {
+        const fields: string[] = [];
+        const values: (string | null)[] = [];
+
+        if (Object.prototype.hasOwnProperty.call(details, "requestHeaders")) {
+            fields.push("request_headers = ?");
+            values.push(
+                details.requestHeaders === undefined
+                    ? null
+                    : this.serializeSensitiveValue(details.requestHeaders),
+            );
+        }
+
+        if (Object.prototype.hasOwnProperty.call(details, "requestBody")) {
+            fields.push("request_body = ?");
+            values.push(
+                details.requestBody === undefined
+                    ? null
+                    : this.serializeSensitiveValue(details.requestBody),
+            );
+        }
+
+        if (Object.prototype.hasOwnProperty.call(details, "responseHeaders")) {
+            fields.push("response_headers = ?");
+            values.push(
+                details.responseHeaders === undefined
+                    ? null
+                    : this.serializeSensitiveValue(details.responseHeaders),
+            );
+        }
+
+        if (Object.prototype.hasOwnProperty.call(details, "responseBody")) {
+            fields.push("response_body = ?");
+            values.push(
+                details.responseBody === undefined
+                    ? null
+                    : this.serializeSensitiveValue(details.responseBody),
+            );
+        }
+
+        if (fields.length === 0) {
+            return;
+        }
+
+        const existing = this.db
+            .prepare(`
+      SELECT span_id
+      FROM http_client_details
+      WHERE span_id = ?
+    `)
+            .get(spanId);
+
+        if (!existing) {
+            this.db
+                .prepare(`
+        INSERT INTO http_client_details (span_id)
+        VALUES (?)
+      `)
+                .run(spanId);
+        }
+
+        values.push(spanId);
+
+        this.db
+            .prepare(`
+      UPDATE http_client_details
+      SET ${fields.join(", ")}
+      WHERE span_id = ?
+    `)
+            .run(...values);
+    }
+    
+    getHttpClientDetails(
+        spanId: string,
+    ): IHttpClientDetails | undefined {
+        const row = this.db
+            .prepare(`
+      SELECT
+        span_id,
+        request_headers,
+        request_body,
+        response_headers,
+        response_body
+      FROM http_client_details
+      WHERE span_id = ?
+    `)
+            .get(spanId) as
+            | {
+                span_id: string;
+                request_headers: string | null;
+                request_body: string | null;
+                response_headers: string | null;
+                response_body: string | null;
+            }
+            | undefined;
+
+        if (!row) {
+            return undefined;
+        }
+
+        return {
+            spanId: row.span_id,
+
+            requestHeaders: row.request_headers
+                ? this.deserializeSensitiveValue(row.request_headers)
+                : undefined,
+
+            requestBody: row.request_body
+                ? this.deserializeSensitiveValue(row.request_body)
+                : undefined,
+
+            responseHeaders: row.response_headers
+                ? this.deserializeSensitiveValue(row.response_headers)
+                : undefined,
+
+            responseBody: row.response_body
+                ? this.deserializeSensitiveValue(row.response_body)
+                : undefined,
+        };
     }
 
     close(): void {
