@@ -41,18 +41,21 @@ function formatDuration(durationMs: number) {
   return `${durationMs.toFixed(1)}ms`
 }
 
-function spanTypeLabel(type: string) {
+function spanTypeLabel(span: IExecutionNode["span"]) {
+  const type = span.type
   switch (type) {
     case "database":
-      return "DB"
+      return "DATABASE"
     case "http.client":
-      return "HTTP"
+      return "EXTERNAL API"
     case "http.server":
-      return "SERVER"
+      return "HTTP ROUTE"
     case "framework":
-      return "FRAMEWORK"
+      return spanAttribute(span, "express.type")?.toLowerCase().includes("middleware")
+        ? "MIDDLEWARE"
+        : "HANDLER"
     default:
-      return ""
+      return undefined
   }
 }
 
@@ -65,39 +68,53 @@ interface ExecutionTreeProps {
 function ExecutionTreeNode({
   node,
   depth = 0,
+  isLast = false,
   selectedSpanId,
   onSelectSpan,
-}: Omit<ExecutionTreeProps, "nodes"> & { node: IExecutionNode; depth?: number }) {
+  rootRequestDurationMs,
+}: Omit<ExecutionTreeProps, "nodes"> & {
+  node: IExecutionNode
+  depth?: number
+  isLast?: boolean
+  rootRequestDurationMs: number
+}) {
   const hasError = Boolean(node.span.error) || node.span.status.code !== 0
-  const typeLabel = spanTypeLabel(node.span.type)
+  const typeLabel = spanTypeLabel(node.span)
   const isSelectable = node.span.type === "database" || node.span.type === "http.client"
   const isSelected = node.span.spanId === selectedSpanId
+  const durationMs = Number.isFinite(node.span.durationMs)
+    ? Math.max(0, node.span.durationMs)
+    : 0
+  const percentage = rootRequestDurationMs > 0
+    ? (durationMs / rootRequestDurationMs) * 100
+    : undefined
+  const hasTimingBar = percentage !== undefined && (
+    ["http.server", "database", "http.client"].includes(node.span.type)
+    || (node.span.type === "framework" && typeLabel === "HANDLER")
+  )
+  const connector = depth === 0 ? null : isLast ? "└──" : "├──"
   const row = (
-    <div
-      className={`flex items-center justify-between gap-4 rounded px-2 py-2 text-sm ${
-        isSelected
-          ? "bg-muted"
-          : hasError
-            ? "bg-destructive/10 text-destructive"
-            : "hover:bg-muted/40"
-      }`}
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
-        {typeLabel && (
-          <span className="shrink-0 text-[10px] tracking-wide text-muted-foreground">
-            {typeLabel}
-          </span>
-        )}
+    <div className={`rounded px-2 py-1.5 text-sm ${isSelected ? "bg-muted" : hasError ? "bg-destructive/10 text-destructive" : "hover:bg-muted/40"}`}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-2">
+          {connector && <span className="shrink-0 font-mono text-muted-foreground">{connector}</span>}
+          {typeLabel && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">{typeLabel}</span>}
+          <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
+        </div>
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+          {formatDuration(durationMs)}{percentage !== undefined && ` (${percentage.toFixed(1)}%)`}
+        </span>
       </div>
-      <span className="shrink-0 font-mono text-xs text-muted-foreground">
-        {formatDuration(node.span.durationMs)}
-      </span>
+      {hasTimingBar && (
+        <div className="ml-1 mt-1 h-0.5 overflow-hidden rounded-full bg-muted/70" aria-label={`${percentage.toFixed(1)}% of request duration`}>
+          <div className="h-full rounded-full bg-muted-foreground/60" style={{ width: `${Math.min(100, percentage)}%` }} />
+        </div>
+      )}
     </div>
   )
 
   return (
-    <div className={depth > 0 ? "ml-4 border-l border-border pl-4" : ""}>
+    <div className={depth > 0 ? "ml-4 border-l border-border pl-3" : ""}>
       {isSelectable ? (
         <button
           type="button"
@@ -111,13 +128,15 @@ function ExecutionTreeNode({
 
       {node.children.length > 0 && (
         <div>
-          {node.children.map((child) => (
+          {node.children.map((child, index) => (
             <ExecutionTreeNode
               key={child.span.spanId}
               node={child}
               depth={depth + 1}
+              isLast={index === node.children.length - 1}
               selectedSpanId={selectedSpanId}
               onSelectSpan={onSelectSpan}
+              rootRequestDurationMs={rootRequestDurationMs}
             />
           ))}
         </div>
@@ -127,14 +146,20 @@ function ExecutionTreeNode({
 }
 
 export function ExecutionTree({ nodes, selectedSpanId, onSelectSpan }: ExecutionTreeProps) {
+  const rootRequestDurationMs = nodes.find((node) => node.span.type === "http.server")?.span.durationMs
+    ?? nodes[0]?.span.durationMs
+    ?? 0
+
   return (
     <div className="space-y-1">
-      {nodes.map((node) => (
+      {nodes.map((node, index) => (
         <ExecutionTreeNode
           key={node.span.spanId}
           node={node}
+          isLast={index === nodes.length - 1}
           selectedSpanId={selectedSpanId}
           onSelectSpan={onSelectSpan}
+          rootRequestDurationMs={rootRequestDurationMs}
         />
       ))}
     </div>
