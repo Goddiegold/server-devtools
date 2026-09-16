@@ -75,12 +75,18 @@ function CaptureSection({
       </h4>
       <div className="space-y-3">
         {Object.keys(formattedHeaders).length > 0 && (
-          <KeyValueRows values={formattedHeaders} />
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-muted-foreground">{title} Headers</h5>
+            <KeyValueRows values={formattedHeaders} />
+          </div>
         )}
         {hasBody && (
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border p-3 font-mono text-xs">
-            {formatValue(body)}
-          </pre>
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-muted-foreground">{title} Body</h5>
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border p-3 font-mono text-xs">
+              {formatValue(body)}
+            </pre>
+          </div>
         )}
       </div>
     </section>
