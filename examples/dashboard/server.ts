@@ -1,6 +1,7 @@
 import { Express } from "express";
 
 import ServerDevTools from "../../src";
+import { trace } from "@opentelemetry/api";
 
 async function bootstrap() {
   const devtools = new ServerDevTools({
@@ -29,11 +30,37 @@ async function bootstrap() {
   // Instrumentation must start before MongoDB/Express/HTTP are loaded.
   await devtools.start();
 
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async function (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> {
+    const beforeSpan = trace.getActiveSpan();
+
+    console.log("FETCH BEFORE", {
+      activeSpanId: beforeSpan?.spanContext().spanId,
+    });
+
+    const response = await originalFetch(input, init);
+
+    const afterSpan = trace.getActiveSpan();
+
+    console.log("FETCH AFTER", {
+      activeSpanId: afterSpan?.spanContext().spanId,
+    });
+
+    return response;
+  };
+
   const express = require("express");
   const { MongoClient } = require("mongodb");
   const http = require("node:http");
 
-  const mongoClient = new MongoClient("mongodb://localhost:27017");
+  const mongoClient = new MongoClient(
+    "mongodb://localhost:27017",
+  );
+
   await mongoClient.connect();
 
   const db = mongoClient.db("server_devtools");
@@ -80,7 +107,10 @@ async function bootstrap() {
   app.post("/external-test", (req, res) => {
     console.log("SERVER RECEIVED BODY:", req.body);
 
-    res.setHeader("x-test-response", "hello-from-server");
+    res.setHeader(
+      "x-test-response",
+      "hello-from-server",
+    );
 
     res.json({
       received: req.body,
@@ -89,124 +119,6 @@ async function bootstrap() {
   });
 
   app.get("/users/:id", async (_req, res) => {
-    function testNativeHttpRequest() {
-      return new Promise<void>((resolve, reject) => {
-        const request = http.request(
-          "http://localhost:3000/external-test",
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-test-header": "serverdevtools-test",
-              "x-another-header": "another-value",
-            },
-          },
-          (response) => {
-            /*
-             * TEST 3:
-             * Can DevTools capture ALL response headers?
-             */
-            console.log("DEVTOOLS NATIVE RESPONSE HEADERS:", response.headers);
-
-            console.log(
-              "DEVTOOLS NATIVE RESPONSE RAW HEADERS:",
-              response.rawHeaders,
-            );
-
-            /*
-             * TEST 4:
-             * Can DevTools observe the response body while the
-             * application consumes the IncomingMessage normally?
-             */
-            const capturedResponseChunks: Buffer[] = [];
-
-            response.on("data", (chunk) => {
-              capturedResponseChunks.push(Buffer.from(chunk));
-            });
-
-            (async () => {
-              const applicationResponseChunks: Buffer[] = [];
-
-              for await (const chunk of response) {
-                applicationResponseChunks.push(Buffer.from(chunk));
-              }
-
-              const devtoolsResponseBody = Buffer.concat(
-                capturedResponseChunks,
-              ).toString("utf8");
-
-              const applicationResponseBody = Buffer.concat(
-                applicationResponseChunks,
-              ).toString("utf8");
-
-              console.log(
-                "DEVTOOLS NATIVE RESPONSE BODY:",
-                devtoolsResponseBody,
-              );
-
-              console.log(
-                "APPLICATION NATIVE RESPONSE BODY:",
-                applicationResponseBody,
-              );
-
-              console.log(
-                "RESPONSE BODIES MATCH:",
-                devtoolsResponseBody === applicationResponseBody,
-              );
-
-              resolve();
-            })().catch(reject);
-          },
-        );
-
-        request.on("error", reject);
-
-        /*
-         * TEST 1:
-         * Can DevTools capture ALL outbound request headers?
-         */
-        console.log(
-          "DEVTOOLS NATIVE REQUEST HEADERS:",
-          request.getHeaders(),
-        );
-
-        /*
-         * TEST 2:
-         * Can DevTools capture the complete request body across
-         * multiple write() calls + the final end() chunk?
-         */
-        const originalWrite = request.write.bind(request);
-        const originalEnd = request.end.bind(request);
-
-        const capturedRequestChunks: Buffer[] = [];
-
-        request.write = ((chunk: any, ...args: any[]) => {
-          if (chunk !== undefined && chunk !== null) {
-            capturedRequestChunks.push(Buffer.from(chunk));
-          }
-
-          return originalWrite(chunk, ...args);
-        }) as typeof request.write;
-
-        request.end = ((chunk?: any, ...args: any[]) => {
-          if (chunk !== undefined && chunk !== null) {
-            capturedRequestChunks.push(Buffer.from(chunk));
-          }
-
-          console.log(
-            "DEVTOOLS NATIVE REQUEST BODY:",
-            Buffer.concat(capturedRequestChunks).toString("utf8"),
-          );
-
-          return originalEnd(chunk, ...args);
-        }) as typeof request.end;
-
-        request.write('{"name":');
-        request.write('"Godwin",');
-        request.end('"token":"fake-test-token"}');
-      });
-    }
-
     await testNativeHttpRequest();
 
     res.json({
@@ -218,11 +130,72 @@ async function bootstrap() {
     throw new Error("ServerDevTools test error");
   });
 
+  app.get("/fetch-test", async (_req, res) => {
+    const response = await fetch(
+      "http://localhost:3000/external-test",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-test-header": "fetch-test",
+        },
+        body: JSON.stringify({
+          name: "Godwin",
+          source: "fetch",
+        }),
+      },
+    );
+
+    const data = await response.json();
+
+    res.json(data);
+  });
+
+  function testNativeHttpRequest() {
+    return new Promise<void>((resolve, reject) => {
+      const request = http.request(
+        "http://localhost:3000/external-test",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-test-header": "serverdevtools-test",
+            "x-another-header": "another-value",
+          },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+
+          response.on("data", (chunk) => {
+            chunks.push(Buffer.from(chunk));
+          });
+
+          response.once("end", () => {
+            console.log(
+              "APPLICATION RECEIVED RESPONSE:",
+              Buffer.concat(chunks).toString("utf8"),
+            );
+
+            resolve();
+          });
+        },
+      );
+
+      request.once("error", reject);
+
+      request.write('{"name":');
+      request.write('"Godwin",');
+      request.end('"token":"fake-test-token"}');
+    });
+  }
+
   const PORT = 3000;
 
   app.listen(PORT, () => {
     console.log(`App: http://localhost:${PORT}`);
-    console.log(`DevTools: http://localhost:${PORT}/_devtools`);
+    console.log(
+      `DevTools: http://localhost:${PORT}/_devtools`,
+    );
   });
 }
 

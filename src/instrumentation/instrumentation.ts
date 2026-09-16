@@ -17,6 +17,8 @@ export class Instrumentation {
     constructor(
         private readonly storage: SQLiteStorage
     ) {
+        process.env.OTEL_METRICS_EXPORTER = "none";
+
         this.outboundHttpCapture =
             new OutboundHttpCapture(storage);
 
@@ -30,6 +32,7 @@ export class Instrumentation {
                         ignoreIncomingRequestHook: (request) => {
                             return request.url?.split('?')[0].startsWith("/_devtools") ?? false;
                         },
+
                         headersToSpanAttributes: {
                             server: {
                                 requestHeaders: [
@@ -53,10 +56,30 @@ export class Instrumentation {
                                 ],
                             },
                         },
+
+
+                        requestHook: (_span, request) => {
+                            if (!(request instanceof ClientRequest)) {
+                                return;
+                            }
+                            this.outboundHttpCapture.trackNativeRequest(
+                                _span.spanContext().spanId,
+                                request,
+                            );
+                        },
+
+                        responseHook: (_span, response) => {
+                            if (!(response instanceof IncomingMessage)) {
+                                return;
+                            }
+
+                            this.outboundHttpCapture.trackNativeResponse(
+                                _span.spanContext().spanId,
+                                response,
+                            );
+                        },
                     }
                 ),
-                // new UndiciInstrumentation(),
-                // new ExpressInstrumentation(),
                 new UndiciInstrumentation({
                     headersToSpanAttributes: {
                         requestHeaders: [
@@ -68,54 +91,26 @@ export class Instrumentation {
                         ],
                     },
 
-                    requestHook: (_span, request) => {
-                        console.log("UNDICI REQUEST:", {
-                            origin: request.origin,
-                            method: request.method,
-                            path: request.path,
-                            headers: request.headers,
-                            contentLength: request.contentLength,
-                            contentType: request.contentType,
-                            body: request.body,
-                        });
-
-                        if (!(request instanceof ClientRequest)) {
-                            return;
-                        }
-                        this.outboundHttpCapture.trackNativeRequest(
-                            _span.spanContext().spanId,
+                    requestHook: (span, request) => {
+                        console.log("UNDICI REQUEST HOOK", {
+                            spanId: span.spanContext().spanId,
+                            traceId: span.spanContext().traceId,
                             request,
-                        );
+                        });
                     },
 
-                    responseHook: (_span, { request, response }) => {
-                        console.log("UNDICI RESPONSE:", {
-                            request: {
-                                origin: request.origin,
-                                method: request.method,
-                                path: request.path,
-                            },
-                            response: {
-                                statusCode: response.statusCode,
-                                statusText: response.statusText,
-                                headers: response.headers,
-                            },
+                    responseHook: (span, responseInfo) => {
+                        console.log("UNDICI RESPONSE HOOK", {
+                            spanId: span.spanContext().spanId,
+                            traceId: span.spanContext().traceId,
+                            responseInfo,
                         });
-
-                        if (!(response instanceof IncomingMessage)) {
-                            return;
-                        }
-
-                        this.outboundHttpCapture.trackNativeResponse(
-                            _span.spanContext().spanId,
-                            response,
-                        );
                     },
                 }),
                 new ExpressInstrumentation({
                     requestHook: (span, info) => {
                         if (info.layerType === ExpressLayerType.REQUEST_HANDLER) {
-                            console.log("DEVTOOLS REQUEST BODY:", info.request.body);
+                            // console.log("DEVTOOLS REQUEST BODY:", info.request.body);
                         }
 
                         if (info.request.body === undefined) {
