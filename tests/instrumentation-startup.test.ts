@@ -48,4 +48,25 @@ test("Instrumentation.start enables fetch capture", async (t) => {
   await instrumentation.shutdown();
   shutDown = true;
   assert.equal(globalThis.fetch, originalFetch);
+  await instrumentation.shutdown();
+});
+
+test("Instrumentation.shutdown closes storage when OpenTelemetry shutdown fails", async () => {
+  const storage = new SQLiteStorage(":memory:");
+  const instrumentation = new Instrumentation(storage);
+  const shutdownError = new Error("OpenTelemetry shutdown failed");
+  let storageClosed = false;
+  const closeStorage = storage.close.bind(storage);
+  storage.close = () => {
+    storageClosed = true;
+    closeStorage();
+  };
+  const sdk = (instrumentation as unknown as {
+    oTelSdk: { shutdown: () => Promise<void> };
+  }).oTelSdk;
+  sdk.shutdown = async () => { throw shutdownError; };
+
+  await assert.rejects(instrumentation.shutdown(), shutdownError);
+  assert.equal(storageClosed, true);
+  await assert.doesNotReject(instrumentation.shutdown());
 });

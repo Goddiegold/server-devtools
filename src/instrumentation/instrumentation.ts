@@ -14,6 +14,7 @@ import { debugLog } from "../utils/logger";
 export class Instrumentation {
     private readonly oTelSdk: NodeSDK;
     private readonly outboundHttpCapture: OutboundHttpCapture;
+    private isShutdown = false;
 
     constructor(
         private readonly storage: SQLiteStorage
@@ -138,10 +139,18 @@ export class Instrumentation {
     }
 
     async shutdown() {
+        if (this.isShutdown) {
+            return;
+        }
+        this.isShutdown = true;
+
         debugLog("Shutting down OpenTelemetry SDK");
         this.outboundHttpCapture.stopFetchCapture();
-        await this.oTelSdk.shutdown();
-        this.storage.close();
+        try {
+            await this.oTelSdk.shutdown();
+        } finally {
+            this.storage.close();
+        }
         debugLog("OpenTelemetry SDK shut down");
     }
 }
