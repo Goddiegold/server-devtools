@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ExecutionTree } from "@/components/execution-tree"
 import { DatabaseDetails } from "@/components/database-details"
+import { HttpClientDetails } from "@/components/http-client-details"
 import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
 import { Loader2, Trash2 } from "lucide-react"
 
@@ -600,6 +601,9 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                   />
                   {selectedSpan?.type === "database" && (
                     <DatabaseDetails span={selectedSpan} />
+                  )}
+                  {selectedSpan?.type === "http.client" && (
+                    <HttpClientDetails span={selectedSpan} />
                   )}
                 </>
               )}

@@ -70,7 +70,7 @@ function ExecutionTreeNode({
 }: Omit<ExecutionTreeProps, "nodes"> & { node: IExecutionNode; depth?: number }) {
   const hasError = Boolean(node.span.error) || node.span.status.code !== 0
   const typeLabel = spanTypeLabel(node.span.type)
-  const isDatabase = node.span.type === "database"
+  const isSelectable = node.span.type === "database" || node.span.type === "http.client"
   const isSelected = node.span.spanId === selectedSpanId
   const row = (
     <div
@@ -98,7 +98,7 @@ function ExecutionTreeNode({
 
   return (
     <div className={depth > 0 ? "ml-4 border-l border-border pl-4" : ""}>
-      {isDatabase ? (
+      {isSelectable ? (
         <button
           type="button"
           className="block w-full text-left"
