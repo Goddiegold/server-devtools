@@ -55,6 +55,24 @@ function formatValue(value: unknown) {
   return formatted === undefined ? String(value) : formatted
 }
 
+function SummaryField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-md border p-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words text-sm font-medium">{value}</dd>
+    </div>
+  )
+}
+
+function ActivityMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-xl font-semibold tabular-nums">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  )
+}
+
 function KeyValueRows({ values }: { values: Record<string, unknown> }) {
   return (
     <dl className="divide-y rounded-md border text-xs">
@@ -459,6 +477,30 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
   const path = attributeString(span, "url.path") ?? "Unknown path"
   const route = attributeString(span, "http.route")
   const status = attributeString(span, "http.response.status_code")
+  const databaseSpans = trace?.spans.filter((item) => item.type === "database") ?? []
+  const outboundSpans = trace?.spans.filter((item) => item.type === "http.client") ?? []
+  const errorSpans = trace?.spans.filter(
+    (item) => item.error !== undefined || item.status.code === 2
+  ) ?? []
+  const databaseSummaries = [...new Set(databaseSpans.map((item) => {
+    const system = attributeString(item, "db.system.name")
+    const operation = attributeString(item, "db.operation.name")
+    return [system, operation].filter(Boolean).join(" · ") || item.name
+  }))]
+  const outboundHosts = [...new Set(outboundSpans.map((item) => {
+    const fullUrl = attributeString(item, "url.full")
+    let urlHost: string | undefined
+    if (fullUrl) {
+      try {
+        urlHost = new URL(fullUrl).host
+      } catch {
+        // Fall back to the separately captured server address below.
+      }
+    }
+    return attributeString(item, "server.address") ??
+      attributeString(item, "url.hostname") ?? urlHost ?? item.name
+  }))]
+  const isRequestError = errorSpans.length > 0 || (status !== undefined && Number(status) >= 400)
 
   return (
     <main className="p-6">
@@ -647,6 +689,64 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
               {!capturedErrorsLoading && !capturedErrorsError && capturedErrors && (
                 <ErrorDetails errors={capturedErrors} />
               )}
+            </section>
+          ) : activeTab === "Overview" ? (
+            <section className="mt-6 space-y-6">
+              <div className="rounded-md border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Request summary</h2>
+                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <SummaryField label="Method" value={method} />
+                  <SummaryField label="Path" value={path} />
+                  <SummaryField label="Route" value={route ?? "—"} />
+                  <SummaryField label="Status code" value={status ?? "—"} />
+                  <SummaryField
+                    label="Total duration"
+                    value={trace.durationMs !== undefined
+                      ? `${trace.durationMs.toFixed(2)} ms`
+                      : span ? `${span.durationMs.toFixed(2)} ms` : "—"}
+                  />
+                  <SummaryField label="Started at" value={new Date(trace.startedAt).toLocaleString()} />
+                  <SummaryField
+                    label="Error state"
+                    value={<Badge variant={isRequestError ? "destructive" : "outline"}>
+                      {isRequestError ? "Error" : "No error"}
+                    </Badge>}
+                  />
+                </dl>
+              </div>
+
+              <div className="rounded-md border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Activity</h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <ActivityMetric label="Total spans" value={trace.spans.length} />
+                  <ActivityMetric label="Database calls" value={databaseSpans.length} />
+                  <ActivityMetric label="Outbound HTTP calls" value={outboundSpans.length} />
+                  <ActivityMetric label="Errors" value={errorSpans.length} />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-md border p-4">
+                  <h2 className="mb-2 text-sm font-semibold">Database activity</h2>
+                  {databaseSummaries.length > 0 ? (
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {databaseSummaries.map((summary) => <li key={summary}>{summary}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No database calls.</p>
+                  )}
+                </div>
+                <div className="rounded-md border p-4">
+                  <h2 className="mb-2 text-sm font-semibold">Outbound services</h2>
+                  {outboundHosts.length > 0 ? (
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {outboundHosts.map((host) => <li key={host}>{host}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No outbound HTTP calls.</p>
+                  )}
+                </div>
+              </div>
             </section>
           ) : (
             <section className="mt-6 rounded-md border p-4">
