@@ -139,6 +139,7 @@ export class Instrumentation {
 
     async shutdown() {
         debugLog("Shutting down OpenTelemetry SDK");
+        this.outboundHttpCapture.stopFetchCapture();
         await this.oTelSdk.shutdown();
         this.storage.close();
         debugLog("OpenTelemetry SDK shut down");

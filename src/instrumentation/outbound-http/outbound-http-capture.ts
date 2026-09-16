@@ -10,6 +10,7 @@ export class OutboundHttpCapture {
     new AsyncLocalStorage<FetchCaptureContext>();
 
   private originalFetch?: typeof globalThis.fetch;
+  private fetchWrapper?: typeof globalThis.fetch;
 
   constructor(
     private readonly storage: SQLiteStorage,
@@ -187,7 +188,7 @@ export class OutboundHttpCapture {
     this.originalFetch = originalFetch;
     debugLog("Fetch capture installed");
 
-    globalThis.fetch = async (
+    const fetchWrapper: typeof globalThis.fetch = async (
       input: string | URL | Request,
       init?: RequestInit,
     ): Promise<Response> => {
@@ -214,6 +215,22 @@ export class OutboundHttpCapture {
         return response;
       });
     };
+
+    this.fetchWrapper = fetchWrapper;
+    globalThis.fetch = fetchWrapper;
+  }
+
+  stopFetchCapture(): void {
+    if (!this.originalFetch) {
+      return;
+    }
+
+    if (globalThis.fetch === this.fetchWrapper) {
+      globalThis.fetch = this.originalFetch;
+    }
+
+    this.originalFetch = undefined;
+    this.fetchWrapper = undefined;
   }
 
   associateFetchSpan(spanId: string): void {

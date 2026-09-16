@@ -32,13 +32,20 @@ test("Instrumentation.start enables fetch capture", async (t) => {
   const originalFetch = globalThis.fetch;
   const storage = new SQLiteStorage(":memory:");
   const instrumentation = new Instrumentation(storage);
+  let shutDown = false;
 
   t.after(async () => {
-    globalThis.fetch = originalFetch;
-    await instrumentation.shutdown();
+    try {
+      if (!shutDown) await instrumentation.shutdown();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   assert.equal(globalThis.fetch, originalFetch);
   await instrumentation.start();
   assert.notEqual(globalThis.fetch, originalFetch);
+  await instrumentation.shutdown();
+  shutDown = true;
+  assert.equal(globalThis.fetch, originalFetch);
 });

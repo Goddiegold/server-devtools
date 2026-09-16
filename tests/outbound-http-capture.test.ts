@@ -204,3 +204,18 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   assert.equal(emptyDetails?.responseHeaders?.["x-response"], "empty");
   assert.equal(emptyDetails?.responseBody, undefined);
 });
+
+test("stopping fetch capture is safe before startup and restores the original fetch", (t) => {
+  const storage = createStorage(t);
+  const capture = new OutboundHttpCapture(storage);
+  const originalFetch = globalThis.fetch;
+
+  capture.stopFetchCapture();
+  assert.equal(globalThis.fetch, originalFetch);
+
+  capture.startFetchCapture();
+  assert.notEqual(globalThis.fetch, originalFetch);
+
+  capture.stopFetchCapture();
+  assert.equal(globalThis.fetch, originalFetch);
+});
