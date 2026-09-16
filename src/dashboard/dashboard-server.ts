@@ -513,9 +513,45 @@ export default class DashboardServer {
         if (
             req.method === Config.REQUEST_METHOD.GET &&
             pathname === Config.DASHBOARD_API_ROUTES.REQUESTS) {
-            const requests = this.storage
-                .getTraceSummaries()
-                .map(summary => ({
+            const searchParams = new URL(requestUrl, "http://localhost").searchParams;
+            const parsePositiveInteger = (name: string, fallback: number) => {
+                const value = searchParams.get(name);
+                if (value === null) {
+                    return fallback;
+                }
+
+                if (!/^\d+$/.test(value)) {
+                    return undefined;
+                }
+
+                const parsed = Number(value);
+                return Number.isSafeInteger(parsed) && parsed > 0
+                    ? parsed
+                    : undefined;
+            };
+            const page = parsePositiveInteger("page", 1);
+            const limit = parsePositiveInteger("limit", 20);
+
+            if (page === undefined || limit === undefined || limit > 100) {
+                res.statusCode = 400;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Page must be a positive integer and limit must be between 1 and 100",
+                }));
+                return;
+            }
+
+            if (!Number.isSafeInteger((page - 1) * limit)) {
+                res.statusCode = 400;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Page is out of range",
+                }));
+                return;
+            }
+
+            const { summaries, total } = this.storage.getPaginatedTraceSummaries(page, limit);
+            const data = summaries.map(summary => ({
                     id: summary.traceId,
                     method: summary.method ?? "UNKNOWN",
                     path: summary.path ?? "",
@@ -526,10 +562,20 @@ export default class DashboardServer {
                     hasError: summary.hasError,
                     user: summary.user,
                 }));
+            const totalPages = Math.ceil(total / limit);
 
-            res.statusCode = 200
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(requests))
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({
+                data,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages,
+                    hasMore: page < totalPages,
+                },
+            }));
             return;
         }
 

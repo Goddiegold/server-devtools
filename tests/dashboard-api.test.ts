@@ -46,6 +46,23 @@ async function run() {
     email: 'godwin@example.com',
   });
 
+  for (let index = 1; index <= 24; index += 1) {
+    storage.saveSpan({
+      traceId: `trace-page-${index}`,
+      spanId: `root-page-${index}`,
+      type: 'http.server',
+      name: `GET /page/${index}`,
+      startedAt: 1000 + index,
+      durationMs: index,
+      attributes: {
+        'http.request.method': 'GET',
+        'url.path': `/page/${index}`,
+      },
+      status: { code: 0 },
+    });
+    storage.saveTraceSummary(storage.getSpansByTraceId(`trace-page-${index}`)[0]);
+  }
+
   // 3. Start ServerDevTools' HTTP server
   const authService = new AuthService('admin', 'test-password', storage);
   const dashboard = new DashboardServer(storage, authService);
@@ -82,23 +99,44 @@ async function run() {
 
     const body = await response.json();
 
-    // 5. This is what React should eventually receive
-    assert.deepEqual(body, [
-      {
-        id: 'trace-123',
-        method: 'GET',
-        path: '/users/123',
-        route: '/users/:id',
-        statusCode: 200,
-        durationMs: 499,
-        startedAt: 1000,
-        hasError: false,
-        user: {
-          id: 'user-123',
-          email: 'godwin@example.com',
-        },
-      },
-    ]);
+    assert.equal(body.data.length, 20);
+    assert.equal(body.data[0].id, 'trace-page-24');
+    assert.deepEqual(body.pagination, {
+      page: 1,
+      limit: 20,
+      total: 25,
+      totalPages: 2,
+      hasMore: true,
+    });
+
+    const secondPageResponse = await apiFetch('/_devtools/api/requests?page=2');
+    assert.equal(secondPageResponse.status, 200);
+    const secondPage = await secondPageResponse.json();
+    assert.equal(secondPage.data.length, 5);
+    assert.equal(secondPage.data[0].id, 'trace-page-4');
+    assert.equal(secondPage.data[4].id, 'trace-123');
+    assert.deepEqual(secondPage.data[4].user, {
+      id: 'user-123',
+      email: 'godwin@example.com',
+    });
+    assert.deepEqual(secondPage.pagination, {
+      page: 2,
+      limit: 20,
+      total: 25,
+      totalPages: 2,
+      hasMore: false,
+    });
+
+    const customPageResponse = await apiFetch('/_devtools/api/requests?page=2&limit=5');
+    const customPage = await customPageResponse.json();
+    assert.equal(customPage.data.length, 5);
+    assert.equal(customPage.pagination.limit, 5);
+    assert.equal(customPage.pagination.totalPages, 5);
+
+    for (const query of ['?page=0', '?page=1.5', '?limit=0', '?limit=101']) {
+      const invalidResponse = await apiFetch(`/_devtools/api/requests${query}`);
+      assert.equal(invalidResponse.status, 400);
+    }
 
     const traceResponse = await apiFetch('/_devtools/api/traces/trace-123');
 
@@ -195,7 +233,16 @@ async function run() {
     const requestsAfterClear = await apiFetch('/_devtools/api/requests');
 
     assert.equal(requestsAfterClear.status, 200);
-    assert.deepEqual(await requestsAfterClear.json(), []);
+    assert.deepEqual(await requestsAfterClear.json(), {
+      data: [],
+      pagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+        hasMore: false,
+      },
+    });
 
 
     console.log('Dashboard API test passed');

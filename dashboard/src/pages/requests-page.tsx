@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { clearHistory, deleteTrace } from "@/api/traces"
-import { getRequests } from "@/api/requests"
+import { getRequests, type IRequestsPagination } from "@/api/requests"
 import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +29,8 @@ function userIdentity(user: IDashboardRequest["user"]): string | undefined {
 
 export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [requests, setRequests] = useState<IDashboardRequest[]>([])
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<IDashboardRequest | null>(null)
@@ -50,6 +52,19 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       setRequests((currentRequests) =>
         currentRequests.filter((request) => request.id !== traceId)
       )
+      if (pagination) {
+        const total = Math.max(0, pagination.total - 1)
+        const totalPages = Math.ceil(total / pagination.limit)
+        if (page > Math.max(totalPages, 1)) {
+          setPage(Math.max(totalPages, 1))
+        }
+        setPagination({
+          ...pagination,
+          total,
+          totalPages,
+          hasMore: page < totalPages,
+        })
+      }
       setPendingDelete(null)
     } catch (deleteError) {
       setError(
@@ -73,6 +88,8 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     try {
       await clearHistory()
       setRequests([])
+      setPage(1)
+      setPagination({ page: 1, limit: 20, total: 0, totalPages: 0, hasMore: false })
       setClearDialogOpen(false)
     } catch (clearError) {
       setError(
@@ -91,9 +108,10 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     async function loadRequests() {
       try {
         setLoading(true)
-        const data = await getRequests()
+        const result = await getRequests(page)
         if (active) {
-          setRequests(data)
+          setRequests(result.data)
+          setPagination(result.pagination)
           setError(null)
         }
       } catch (requestError) {
@@ -118,7 +136,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       active = false
       clearInterval(interval)
     }
-  }, [])
+  }, [page])
 
   return (
     <main className="p-6">
@@ -142,8 +160,37 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
         </Button>
       </div>
 
-      <div className="mb-4 max-w-md">
-        <Input placeholder="Search requests..." />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="w-full max-w-md">
+          <Input placeholder="Search requests..." />
+        </div>
+        {pagination && (
+          <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="whitespace-nowrap">
+              {pagination.total === 0
+                ? "No requests"
+                : `Page ${pagination.page} of ${pagination.totalPages} · ${pagination.total} requests`}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || !pagination.hasMore}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-md border">

@@ -323,6 +323,55 @@ export default class SQLiteStorage {
         });
     }
 
+    getPaginatedTraceSummaries(page: number, limit: number): {
+        summaries: ITraceSummary[];
+        total: number;
+    } {
+        const offset = (page - 1) * limit;
+        const totalRow = this.db.prepare(`
+        SELECT COUNT(*) AS total
+        FROM traces t
+        LEFT JOIN trace_metadata tm
+            ON tm.trace_id = t.trace_id
+    `).get() as { total: number };
+
+        const rows = this.db.prepare(`
+        SELECT
+            t.*,
+            tm.user_json
+        FROM traces t
+        LEFT JOIN trace_metadata tm
+            ON tm.trace_id = t.trace_id
+        ORDER BY t.started_at DESC
+        LIMIT ? OFFSET ?
+    `).all(limit, offset);
+
+        const summaries = rows.map((row: any) => {
+            const userJson = row.user_json !== null
+                ? JSON.parse(row.user_json)
+                : undefined;
+
+            return {
+                traceId: row.trace_id,
+                rootSpanId: row.root_span_id ?? undefined,
+                startedAt: row.started_at,
+                durationMs: row.duration_ms ?? undefined,
+                method: row.method ?? undefined,
+                path: row.path ?? undefined,
+                route: row.route ?? undefined,
+                statusCode: row.status_code ?? undefined,
+                hasError: row.has_error === 1,
+                user: userJson !== undefined
+                    ? this.encryptionService
+                        ? this.encryptionService.decryptData(userJson)
+                        : userJson
+                    : undefined,
+            };
+        });
+
+        return { summaries, total: totalRow.total };
+    }
+
     saveRequestBody(traceId: string, body: unknown): void {
         const statement = this.db.prepare(`
         INSERT INTO trace_metadata (
