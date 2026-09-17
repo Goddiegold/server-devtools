@@ -90,47 +90,146 @@ npm install server-devtools
 
 ## Quick Start
 
-### Express
+Create an initialization file that constructs and starts your own instance.
+The filename and location are up to you; `server-devtools.ts` is used here as
+an example.
 
-``` ts
+```ts
+// server-devtools.ts (example filename; choose your own)
 import ServerDevTools from "server-devtools";
 
+export const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME!,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+  },
+  // Optional: encrypt selected captured fields in SQLite.
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+    fields: ["authorization", "password", "token"],
+  },
+});
+
+await devtools.start();
+```
+
+### Encrypt sensitive data
+
+ServerDevTools stores captured request/response data and inspection history in
+SQLite. The optional `encryption` setting encrypts matching sensitive values
+before they are persisted and decrypts them when authorized users inspect them
+in the dashboard. This protects data at rest; it does not change application
+payloads or transport behavior and does not replace normal application security.
+
+- `key` is a base64-encoded key that decodes to exactly 32 bytes. ServerDevTools
+  uses it with AES-256-GCM. Keep it in an environment variable or secrets
+  manager; do not hardcode it.
+- `fields` lists object field names to protect. Matching is case-insensitive
+  and recursive through captured objects and arrays. Supplying `fields`
+  replaces the defaults; when omitted, the defaults are `password`,
+  `accessToken`, `refreshToken`, `authorization`, and `cookie`.
+
+Generate a key with Node.js:
+
+```sh
+node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64"))'
+```
+
+Preload the initialization file before your application entry point so
+instrumentation starts before application modules load. In the examples below,
+adjust the paths to match your own initialization file and entry point.
+Preloading is required because ServerDevTools/OpenTelemetry must initialize
+before instrumented dependencies such as MongoDB are loaded.
+
+<details open>
+<summary>Node.js / TypeScript</summary>
+
+```ts
+// src/main.ts
+import { createServer } from "node:http";
+import { devtools } from "../server-devtools";
+
+const server = createServer((req, res) => {
+  devtools.middleware(req, res, () => {
+    res.statusCode = 404;
+    res.end("Not found");
+  });
+});
+
+server.listen(3000);
+```
+
+```sh
+# Development
+npx tsx --import ./server-devtools.ts src/main.ts
+
+# Production
+node --import ./dist/server-devtools.js ./dist/main.js
+```
+
+</details>
+
+<details>
+<summary>Express</summary>
+
+```ts
+// src/main.ts
+import express from "express";
+import { devtools } from "../server-devtools";
+
+const app = express();
+app.use((req, res, next) => devtools.middleware(req, res, next));
+
+app.get("/users/:id", async (req, res) => {
+  res.json({ id: req.params.id, name: "John Doe" });
+});
+
+app.listen(3000);
+```
+
+```sh
+# Development
+npx tsx --import ./server-devtools.ts src/main.ts
+
+# Production
+node --import ./dist/server-devtools.js ./dist/main.js
+```
+
+</details>
+
+<details>
+<summary>NestJS</summary>
+
+```ts
+// src/main.ts
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { devtools } from "../server-devtools";
+import ServerDevToolsNestInterceptor from "server-devtools/dist/src/integrations/nestjs/server-devtools-nest.interceptor.js";
+
 async function bootstrap() {
-  const devtools = new ServerDevTools();
-
-  await devtools.start();
-
-  const express = require("express");
-  const app = express();
-
-  app.use(express.json());
-
-  app.use((req, res, next) => {
-    devtools.middleware(req, res);
-
-    if (req.url.startsWith("/_devtools")) {
-      devtools.handle(req, res);
-      return;
-    }
-
-    next();
-  });
-
-  app.get("/users/:id", async (req, res) => {
-    res.json({
-      id: req.params.id,
-      name: "John Doe",
-    });
-  });
-
-  app.listen(3000, () => {
-    console.log("App: http://localhost:3000");
-    console.log("ServerDevTools: http://localhost:3000/_devtools");
-  });
+  const app = await NestFactory.create(AppModule);
+  app.use((req, res, next) => devtools.middleware(req, res, next));
+  app.useGlobalInterceptors(new ServerDevToolsNestInterceptor());
+  await app.listen(3000);
 }
 
 bootstrap();
 ```
+
+```sh
+# Development
+npx tsx --import ./server-devtools.ts src/main.ts
+
+# Production
+node --import ./dist/server-devtools.js ./dist/main.js
+```
+
+</details>
+
+Each example imports and mounts the same instance that was started by the
+preloaded initialization file. Its middleware serves the dashboard from the
+application's existing HTTP server at `http://localhost:<your-port>/_devtools`.
 
 OpenTelemetry and outbound fetch capture start when `devtools.start()` is
 called; constructing the instance alone does not wrap `globalThis.fetch`.

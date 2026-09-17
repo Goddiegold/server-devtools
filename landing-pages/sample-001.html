@@ -328,24 +328,22 @@
 <div class="p-6 rounded-xl bg-surface-container-low flex flex-col justify-between">
 <div>
 <span class="font-code-medium text-code-medium text-outline font-semibold">02</span>
-<h3 class="font-headline-sm text-headline-sm text-on-surface mt-2 mb-2 font-semibold">Start &amp; Mount</h3>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mt-2 mb-2 font-semibold">Initialize &amp; Preload</h3>
 <p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
-              Start instrumentation, then mount middleware in your application. It also handles the <code>/_devtools</code> dashboard.
+              Create and start your own initialization file, then preload it before your application starts. Choose any filename and location.
             </p>
 </div>
-<div class="p-2.5 rounded bg-surface-container-lowest font-code-sm text-code-sm text-on-surface select-all shadow-sm">
-            const devtools = new ServerDevTools(options);<br/>
-            await devtools.start();<br/>
-            app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
+<div class="p-2.5 rounded bg-surface-container-lowest font-code-sm text-code-sm text-on-surface shadow-sm">
+            Initialize once · preload before app imports
           </div>
 </div>
 <!-- Step 3 -->
 <div class="p-6 rounded-xl bg-surface-container-low flex flex-col justify-between">
 <div>
 <span class="font-code-medium text-code-medium text-outline font-semibold">03</span>
-<h3 class="font-headline-sm text-headline-sm text-on-surface mt-2 mb-2 font-semibold">Inspect</h3>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mt-2 mb-2 font-semibold">Import &amp; Inspect</h3>
 <p class="font-body-sm text-body-sm text-on-surface-variant mb-4">
-              Navigate to <code class="font-code-sm text-code-sm px-1 py-0.5 rounded bg-surface-container">/_devtools</code> to inspect requests and their execution history.
+              Import that same instance in your application, mount its middleware, and open <code class="font-code-sm text-code-sm px-1 py-0.5 rounded bg-surface-container">/_devtools</code> to inspect requests.
             </p>
 </div>
 <div class="p-2.5 rounded bg-surface-container-lowest font-code-sm text-code-sm text-secondary font-medium shadow-sm flex items-center gap-2">
@@ -459,43 +457,196 @@
 </div>
 <!-- Right Code View -->
 <div class="lg:col-span-7">
-<div class="rounded-xl shadow-lg bg-surface-container-lowest overflow-hidden">
-<!-- Code Tab Header -->
-<div class="h-9 px-4 bg-surface-container-low flex items-center justify-between text-outline font-code-sm text-code-sm select-none">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-[14px]">code</span>
-<span class="text-on-surface font-medium">server.ts</span>
+<div id="integration-examples" class="rounded-xl shadow-lg bg-surface-container-lowest overflow-hidden min-w-0">
+<div class="flex items-center justify-between gap-2 p-2 bg-surface-container-low border-b border-outline-variant/40">
+<div role="tablist" aria-label="Choose your Node.js framework" class="flex items-center gap-1 min-w-0 overflow-x-auto">
+<button type="button" id="tab-node" role="tab" aria-selected="true" aria-controls="panel-node" data-integration-tab="node" class="px-3 py-2 rounded-md whitespace-nowrap font-body-medium text-body-medium bg-surface-container-lowest text-primary shadow-sm font-semibold">Node.js / TypeScript</button>
+<button type="button" id="tab-express" role="tab" aria-selected="false" aria-controls="panel-express" data-integration-tab="express" tabindex="-1" class="px-3 py-2 rounded-md whitespace-nowrap font-body-medium text-body-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest/70">Express</button>
+<button type="button" id="tab-nest" role="tab" aria-selected="false" aria-controls="panel-nest" data-integration-tab="nest" tabindex="-1" class="px-3 py-2 rounded-md whitespace-nowrap font-body-medium text-body-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest/70">NestJS</button>
 </div>
-<span class="text-outline">TypeScript</span>
+<button type="button" data-copy-integration class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-2 rounded-md font-body-sm text-body-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" aria-label="Copy active code example">
+<span class="material-symbols-outlined text-[16px]" data-copy-icon>content_copy</span>
+<span data-copy-label>Copy code</span>
+</button>
 </div>
-<!-- Monospace Code View -->
-<div class="p-5 font-code-sm text-code-sm leading-relaxed overflow-x-auto bg-surface-container-lowest">
-<pre class="text-on-surface font-mono"><span class="text-primary font-medium">import</span> ServerDevTools <span class="text-primary font-medium">from</span> <span class="text-secondary font-medium">"server-devtools"</span>;
+<section id="panel-node" role="tabpanel" aria-labelledby="tab-node" data-integration-panel="node" class="min-w-0">
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts (example filename; choose your own)
+import ServerDevTools from "server-devtools";
 
-<span class="text-primary font-medium">const</span> devtools = <span class="text-primary font-medium">new</span> <span class="text-on-surface font-semibold">ServerDevTools</span>({
-  auth: { username: process.env.SERVER_DEVTOOLS_USERNAME!,
-    password: process.env.SERVER_DEVTOOLS_PASSWORD! },
+export const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME!,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+  },
+  // Optional encryption at rest.
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+    fields: ["authorization", "password", "token"],
+  },
 });
-<span class="text-primary font-medium">await</span> devtools.<span class="text-primary">start</span>();
 
-<span class="text-primary font-medium">const</span> { <span class="text-primary">default</span>: express } = <span class="text-primary font-medium">await</span> <span class="text-primary">import</span>(<span class="text-secondary font-medium">"express"</span>);
-<span class="text-primary font-medium">const</span> app = <span class="text-primary">express</span>();
-app.<span class="text-primary">use</span>((req, res, next) =&gt; devtools.<span class="text-primary">middleware</span>(req, res, next));
+await devtools.start();
 
-app.<span class="text-primary">get</span>(<span class="text-secondary font-medium">"/users/:id"</span>, <span class="text-primary font-medium">async</span> (req, res) =&gt; {
-  <span class="text-outline italic">// normal application code</span>
+// src/main.ts
+import { createServer } from "node:http";
+import { devtools } from "../server-devtools";
+
+const server = createServer((req, res) =&gt; {
+  devtools.middleware(req, res, () =&gt; {
+    res.statusCode = 404;
+    res.end("Not found");
+  });
 });
-app.<span class="text-primary">listen</span>(<span class="text-tertiary">3000</span>);</pre>
-</div>
-<!-- Footer note on code block -->
+server.listen(3000);
+
+# Development
+npx tsx --import ./server-devtools.ts src/main.ts
+
+# Production
+node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
+</section>
+<section id="panel-express" role="tabpanel" aria-labelledby="tab-express" data-integration-panel="express" class="min-w-0" hidden>
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts (example filename; choose your own)
+import ServerDevTools from "server-devtools";
+
+export const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME!,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+  },
+  // Optional encryption at rest.
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+    fields: ["authorization", "password", "token"],
+  },
+});
+
+await devtools.start();
+
+// src/main.ts
+import express from "express";
+import { devtools } from "../server-devtools";
+
+const app = express();
+app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
+
+app.get("/users/:id", async (req, res) =&gt; {
+  res.json({ id: req.params.id });
+});
+
+app.listen(3000);
+
+# Development
+npx tsx --import ./server-devtools.ts src/main.ts
+
+# Production
+node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
+</section>
+<section id="panel-nest" role="tabpanel" aria-labelledby="tab-nest" data-integration-panel="nest" class="min-w-0" hidden>
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts (example filename; choose your own)
+import ServerDevTools from "server-devtools";
+
+export const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME!,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+  },
+  // Optional encryption at rest.
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+    fields: ["authorization", "password", "token"],
+  },
+});
+
+await devtools.start();
+
+// src/main.ts
+import "reflect-metadata";
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { devtools } from "../server-devtools";
+import ServerDevToolsNestInterceptor from "server-devtools/dist/src/integrations/nestjs/server-devtools-nest.interceptor.js";
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
+  app.useGlobalInterceptors(new ServerDevToolsNestInterceptor());
+  await app.listen(3000);
+}
+
+bootstrap();
+
+# Development
+npx tsx --import ./server-devtools.ts src/main.ts
+
+# Production
+node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
+</section>
 <div class="px-4 py-2.5 bg-surface-container-low/50 flex flex-wrap items-center justify-between gap-2 font-code-sm text-code-sm text-on-surface-variant">
-<div class="flex items-center gap-2">
-<span class="w-2 h-2 rounded-full bg-secondary"></span>
-<span>Dashboard active at <strong>/_devtools</strong></span>
-</div>
-<span class="text-outline">Dashboard authentication supported</span>
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary"></span><span>Preload initializes instrumentation before application imports.</span></div>
+<span class="text-outline">Same HTTP server · <strong>/_devtools</strong></span>
+<span class="w-full text-outline">Sensitive captured fields can be encrypted before they are stored in ServerDevTools' local history.</span>
 </div>
 </div>
+<script>
+(() => {
+  const root = document.getElementById("integration-examples");
+  if (!root) return;
+
+  const tabs = Array.from(root.querySelectorAll("[data-integration-tab]"));
+  const panels = Array.from(root.querySelectorAll("[data-integration-panel]"));
+  const tabList = root.querySelector('[role="tablist"]');
+
+  function activateTab(tab, moveFocus = false) {
+    const selected = tab.dataset.integrationTab;
+    tabs.forEach((item) => {
+      const active = item === tab;
+      item.setAttribute("aria-selected", String(active));
+      item.tabIndex = active ? 0 : -1;
+      item.classList.toggle("bg-surface-container-lowest", active);
+      item.classList.toggle("text-primary", active);
+      item.classList.toggle("shadow-sm", active);
+      item.classList.toggle("font-semibold", active);
+      item.classList.toggle("text-on-surface-variant", !active);
+      item.classList.toggle("hover:text-on-surface", !active);
+      item.classList.toggle("hover:bg-surface-container-lowest/70", !active);
+    });
+    panels.forEach((panel) => {
+      panel.hidden = panel.dataset.integrationPanel !== selected;
+    });
+    if (moveFocus) tab.focus();
+  }
+
+  tabs.forEach((tab) => tab.addEventListener("click", () => activateTab(tab)));
+  tabList.addEventListener("keydown", (event) => {
+    const index = tabs.indexOf(document.activeElement);
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const next = tabs[(index + direction + tabs.length) % tabs.length];
+    activateTab(next, true);
+  });
+
+  root.querySelector("[data-copy-integration]").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const activePanel = panels.find((panel) => !panel.hidden);
+    const label = button.querySelector("[data-copy-label]");
+    const icon = button.querySelector("[data-copy-icon]");
+    try {
+      await navigator.clipboard.writeText(activePanel.querySelector("code").textContent);
+      label.textContent = "Copied";
+      icon.textContent = "check";
+      setTimeout(() => {
+        label.textContent = "Copy code";
+        icon.textContent = "content_copy";
+      }, 1500);
+    } catch {
+      label.textContent = "Copy failed";
+      setTimeout(() => { label.textContent = "Copy code"; }, 1500);
+    }
+  });
+})();
+</script>
 </div>
 </div>
 </div>
