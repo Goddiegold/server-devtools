@@ -585,7 +585,7 @@ node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
 <div class="px-4 py-2.5 bg-surface-container-low/50 flex flex-wrap items-center justify-between gap-2 font-code-sm text-code-sm text-on-surface-variant">
 <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary"></span><span>Preload initializes instrumentation before application imports.</span></div>
 <span class="text-outline">Same HTTP server · <strong>/_devtools</strong></span>
-<span class="w-full text-outline">Sensitive captured fields can be encrypted before they are stored in ServerDevTools' local history.</span>
+<span class="w-full text-outline">Sensitive captured fields can be encrypted before local storage. By default: password, accessToken, refreshToken, authorization, cookie. A custom fields list replaces these defaults.</span>
 </div>
 </div>
 <script>

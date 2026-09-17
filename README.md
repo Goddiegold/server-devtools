@@ -125,9 +125,10 @@ payloads or transport behavior and does not replace normal application security.
   uses it with AES-256-GCM. Keep it in an environment variable or secrets
   manager; do not hardcode it.
 - `fields` lists object field names to protect. Matching is case-insensitive
-  and recursive through captured objects and arrays. Supplying `fields`
-  replaces the defaults; when omitted, the defaults are `password`,
-  `accessToken`, `refreshToken`, `authorization`, and `cookie`.
+  and recursive through captured objects and arrays. When `fields` is omitted,
+  the defaults are `password`, `accessToken`, `refreshToken`, `authorization`,
+  and `cookie`. Specifying `fields` overrides that entire default list; the
+  defaults are not added to your custom list.
 
 Generate a key with Node.js:
 
