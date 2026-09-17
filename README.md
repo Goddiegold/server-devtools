@@ -206,7 +206,7 @@ node --import ./dist/server-devtools.js ./dist/main.js
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { devtools } from "../server-devtools";
-import ServerDevToolsNestInterceptor from "server-devtools/dist/src/integrations/nestjs/server-devtools-nest.interceptor.js";
+import { ServerDevToolsNestInterceptor } from "server-devtools/nestjs";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -314,17 +314,15 @@ ServerDevTools uses OpenTelemetry instrumentation to observe supported
 backend operations.
 
 ``` text
-Application
+Application request and dependencies
     ↓
-OpenTelemetry Instrumentation
+OpenTelemetry captures supported activity
     ↓
-ServerDevTools Span Mapper
+ServerDevTools maps captured spans and details
     ↓
-Trace Assembly
+Historical inspection data in SQLite
     ↓
-In-memory Trace Store
-    ↓
-ServerDevTools Dashboard
+Embedded dashboard on the application's HTTP server
 ```
 
 OpenTelemetry provides the instrumentation layer. ServerDevTools
@@ -354,10 +352,10 @@ Initial support focuses on Node.js applications:
 
 -   Node.js HTTP
 -   Express
--   NestJS
--   MongoDB
--   outgoing HTTP requests
--   OpenTelemetry-compatible instrumentation
+-   NestJS middleware and error interception
+-   MongoDB operations
+-   native HTTP/HTTPS and fetch/Undici requests, including headers and bodies
+-   OpenTelemetry-powered activity capture
 
 Support will expand as the project develops.
 
@@ -383,17 +381,13 @@ The first release focuses on making this workflow excellent:
 ``` text
 Install ServerDevTools
         ↓
+Initialize + preload ServerDevTools
+        ↓
+Start application
+        ↓
 Open /_devtools
         ↓
-Run a request
-        ↓
-Inspect request
-        ↓
-Inspect execution
-        ↓
-Inspect response
-        ↓
-Inspect errors
+Run and inspect requests
 ```
 
 Expect APIs and configuration to evolve before `1.0`.
@@ -413,13 +407,15 @@ Near-term:
 -   [x] Response headers
 -   [x] Response body
 -   [x] Execution tree
--   [x] Outgoing HTTP spans
--   [ ] Error inspection
--   [ ] Database inspection
+-   [x] Native HTTP/HTTPS and fetch/Undici inspection
+-   [x] MongoDB inspection
+-   [x] Error inspection
+-   [x] NestJS integration and error interception
+-   [x] Encryption at rest for selected fields
 -   [ ] Request/response redaction
 -   [ ] Body-size limits
 -   [ ] Production-safe configuration
--   [ ] Improved NestJS support
+-   [ ] Broader NestJS compatibility
 -   [ ] Static dashboard packaging
 
 Future ideas:
@@ -441,11 +437,12 @@ ServerDevTools may capture sensitive application data, including request
 headers, request bodies, response bodies, database operations, and
 external request metadata.
 
-Do not expose the ServerDevTools dashboard publicly without appropriate
-protection.
+Optional encryption at rest can protect configured fields in supported
+captured data. It does not redact all captured data or replace application
+security practices. The dashboard has authentication; use strong credentials
+and restrict access to `/_devtools` through your network and deployment setup.
 
-Production-safe redaction, capture limits, and access-control options
-are being developed.
+Automatic redaction and capture-size limits are not currently implemented.
 
 ------------------------------------------------------------------------
 
@@ -475,4 +472,4 @@ Issues, ideas, bug reports, and contributions are welcome.
 
 ## License
 
-MIT
+ISC

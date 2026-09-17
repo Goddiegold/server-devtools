@@ -6,6 +6,10 @@
   "author": "",
   "type": "commonjs",
   "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./nestjs": "./dist/src/nestjs.js"
+  },
   "files": [
     "dist"
   ],
