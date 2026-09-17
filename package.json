@@ -30,7 +30,7 @@
 
  "scripts": {
   "clean": "rm -rf dist",
-  "build:sdk": "tsc -p tsconfig.build.json",
+  "build:sdk": "tsc -p tsconfig.build.json && node scripts/finalize-commonjs-entry.cjs",
   "build:dashboard": "npm --prefix dashboard run build",
   "build": "npm run clean && npm run build:sdk && npm run build:dashboard",
   "test": "tsx --test tests/*.test.ts",
