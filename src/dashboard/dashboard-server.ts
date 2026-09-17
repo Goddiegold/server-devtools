@@ -1,4 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { readFileSync, existsSync } from "node:fs";
+import path from "node:path";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
 import SQLiteStorage from "../storage/sqlite-storage";
@@ -7,6 +9,19 @@ import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
 import AuthService from "../security/auth.service";
 import { ISession } from "../types";
+
+const sourceBuildDashboardDirectory = path.resolve(__dirname, "../../dist/dashboard");
+const dashboardDirectory = existsSync(path.join(sourceBuildDashboardDirectory, "index.html"))
+    ? sourceBuildDashboardDirectory
+    : path.resolve(__dirname, "../../dashboard");
+const contentTypes: Record<string, string> = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".woff2": "font/woff2",
+    ".json": "application/json; charset=utf-8",
+};
 
 
 export default class DashboardServer {
@@ -580,6 +595,37 @@ export default class DashboardServer {
                 },
             }));
             return;
+        }
+
+        if (
+            req.method === "GET" &&
+            (pathname === "/_devtools" || pathname.startsWith("/_devtools/")) &&
+            !pathname.startsWith("/_devtools/api/") &&
+            pathname !== "/_devtools/api"
+        ) {
+            const relativePath = pathname === "/_devtools" || pathname === "/_devtools/"
+                ? "index.html"
+                : pathname.slice("/_devtools/".length);
+
+            try {
+                const decodedPath = decodeURIComponent(relativePath);
+                const filePath = path.resolve(dashboardDirectory, decodedPath);
+                if (filePath !== dashboardDirectory && !filePath.startsWith(`${dashboardDirectory}${path.sep}`)) {
+                    res.statusCode = 404;
+                    res.end("Not Found");
+                    return;
+                }
+
+                const content = readFileSync(filePath);
+                res.statusCode = 200;
+                res.setHeader("Content-Type", contentTypes[path.extname(filePath)] ?? "application/octet-stream");
+                res.end(content);
+                return;
+            } catch {
+                res.statusCode = 404;
+                res.end("Not Found");
+                return;
+            }
         }
 
 

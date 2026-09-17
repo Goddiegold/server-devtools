@@ -91,7 +91,29 @@ async function run() {
     },
   );
 
+  const staticFetch = (path: string) => fetch(`http://127.0.0.1:${address.port}${path}`);
+
   try {
+    for (const path of ['/_devtools', '/_devtools/']) {
+      const dashboardResponse = await staticFetch(path);
+      assert.equal(dashboardResponse.status, 200);
+      assert.match(dashboardResponse.headers.get('content-type') ?? '', /text\/html/);
+      assert.match(await dashboardResponse.text(), /<html/i);
+    }
+
+    const faviconResponse = await staticFetch('/_devtools/favicon.svg');
+    assert.equal(faviconResponse.status, 200);
+    assert.match(faviconResponse.headers.get('content-type') ?? '', /image\/svg\+xml/);
+
+    const missingAssetResponse = await staticFetch('/_devtools/missing.js');
+    assert.equal(missingAssetResponse.status, 404);
+
+    const traversalResponse = await staticFetch('/_devtools/%2e%2e%2f%2e%2e%2fpackage.json');
+    assert.equal(traversalResponse.status, 404);
+
+    const unauthenticatedApiResponse = await fetch(`http://127.0.0.1:${address.port}/_devtools/api/requests`);
+    assert.equal(unauthenticatedApiResponse.status, 401);
+
     // 4. Call the NEW endpoint we want to build
     const response = await apiFetch('/_devtools/api/requests');
 

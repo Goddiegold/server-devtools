@@ -1,8 +1,8 @@
 {
-  "name": "server-devtool",
+  "name": "server-devtools",
   "version": "0.1.0",
   "description": "Chrome DevTools for your backend. Inspect HTTP requests, database operations, outbound calls, errors, and execution timing from an embedded dashboard.",
-  "license": "MIT",
+"license": "Apache-2.0",
   "author": "Godwin Ehikhamhen",
   "type": "commonjs",
 
@@ -28,13 +28,15 @@
     "LICENSE"
   ],
 
-  "scripts": {
-    "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
-    "test": "tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run test && npm run typecheck && npm run build"
-  },
+ "scripts": {
+  "clean": "rm -rf dist",
+  "build:sdk": "tsc -p tsconfig.build.json",
+  "build:dashboard": "npm --prefix dashboard run build",
+  "build": "npm run clean && npm run build:sdk && npm run build:dashboard",
+  "test": "tsx --test tests/*.test.ts",
+  "typecheck": "tsc --noEmit",
+  "prepublishOnly": "npm run test && npm run typecheck && npm run build"
+},
 
   "keywords": [
     "nodejs",
