@@ -1,21 +1,58 @@
 {
   "name": "server-devtool",
-  "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
+  "version": "0.1.0",
+  "description": "Chrome DevTools for your backend. Inspect HTTP requests, database operations, outbound calls, errors, and execution timing from an embedded dashboard.",
+  "license": "MIT",
+  "author": "Godwin Ehikhamhen",
   "type": "commonjs",
-  "main": "index.js",
+
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+
   "exports": {
-    ".": "./index.js",
-    "./nestjs": "./dist/src/nestjs.js"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "require": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./nestjs": {
+      "types": "./dist/src/nestjs.d.ts",
+      "require": "./dist/src/nestjs.js",
+      "default": "./dist/src/nestjs.js"
+    }
   },
+
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
+
   "scripts": {
-    "test": "tsx --test tests/*.test.ts"
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run test && npm run typecheck && npm run build"
   },
+
+  "keywords": [
+    "nodejs",
+    "debugging",
+    "devtools",
+    "backend",
+    "opentelemetry",
+    "observability",
+    "tracing",
+    "express",
+    "nestjs",
+    "mongodb"
+  ],
+
+  "engines": {
+    "node": ">=20"
+  },
+
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
@@ -26,6 +63,7 @@
     "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0"
   },
+
   "devDependencies": {
     "@nestjs/common": "^11.2.3",
     "@nestjs/core": "^11.2.3",
@@ -37,7 +75,6 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "typescript": "^7.0.2"
   }
 }
