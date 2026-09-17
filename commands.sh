@@ -55,3 +55,11 @@ curl http://localhost:3000/users/fetch
 
 # 5. MongoDB + outbound fetch
 curl http://localhost:3000/users/combined/123
+
+npx tsx --import ./src/register.ts examples/nestjs/main.ts
+
+curl http://localhost:3000/users/hello
+curl http://localhost:3000/users/mongo/123
+curl http://localhost:3000/users/fetch
+curl http://localhost:3000/users/combined/123
+curl http://localhost:3000/users/broken
