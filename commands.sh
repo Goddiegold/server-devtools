@@ -63,3 +63,6 @@ curl http://localhost:3000/users/mongo/123
 curl http://localhost:3000/users/fetch
 curl http://localhost:3000/users/combined/123
 curl http://localhost:3000/users/broken
+
+npm run build
+npm pack
