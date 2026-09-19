@@ -25,7 +25,7 @@ one developer-focused interface.
 
 ## Demo
 
-> Add launch GIF/video here.
+![ServerDevTools demo](./assets/server-devtools-demo.gif)
 
 ``` text
 POST /users
