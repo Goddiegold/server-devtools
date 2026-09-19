@@ -1,5 +1,6 @@
 import SQLiteStorage from "../storage/sqlite-storage";
 import { ISession } from "../types";
+import { debugLog } from "../utils/logger";
 import crypto from "node:crypto";
 
 class AuthService {
@@ -44,12 +45,19 @@ class AuthService {
 
         const normalizedUsername = username?.toLowerCase()?.trim()
 
-        this.storage.saveSession({
-            sessionHash,
-            username: normalizedUsername,
-            createdAt,
-            expiresAt,
-        });
+        try {
+            this.storage.saveSession({
+                sessionHash,
+                username: normalizedUsername,
+                createdAt,
+                expiresAt,
+            });
+        } catch (error) {
+            debugLog("Session creation persistence failed", {
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
+            throw error;
+        }
 
         return token;
     }
@@ -57,12 +65,27 @@ class AuthService {
     getSession(token: string): ISession | undefined {
         const currentDate = Date.now()
         const sessionHash = this.hashSessionToken(token)
-        const session = this.storage.getSessionByHash(sessionHash)
+        let session: ISession | undefined;
+
+        try {
+            session = this.storage.getSessionByHash(sessionHash)
+        } catch (error) {
+            debugLog("Session lookup failed", {
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
+            return undefined;
+        }
 
         if (!session) return undefined
         const hasExpired = session.expiresAt <= currentDate
         if (hasExpired) {
-            this.storage.deleteSession(sessionHash)
+            try {
+                this.storage.deleteSession(sessionHash)
+            } catch (error) {
+                debugLog("Expired session cleanup failed", {
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+            }
             return undefined
         }
 
@@ -71,7 +94,13 @@ class AuthService {
 
     deleteSession(token: string): void {
         const sessionHash = this.hashSessionToken(token)
-        this.storage.deleteSession(sessionHash)
+        try {
+            this.storage.deleteSession(sessionHash)
+        } catch (error) {
+            debugLog("Session deletion failed", {
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
+        }
     }
 }
 

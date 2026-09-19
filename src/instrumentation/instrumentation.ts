@@ -123,7 +123,14 @@ export class Instrumentation {
                         const traceId = span.spanContext().traceId;
 
 
-                        this.storage.saveRequestBody(traceId, info.request.body)
+                        try {
+                            this.storage.saveRequestBody(traceId, info.request.body)
+                        } catch (error) {
+                            debugLog("Request body capture failed", {
+                                traceId,
+                                errorName: error instanceof Error ? error.name : typeof error,
+                            });
+                        }
 
                     },
                 }),

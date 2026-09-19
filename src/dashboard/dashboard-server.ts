@@ -9,6 +9,7 @@ import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
 import AuthService from "../security/auth.service";
 import { ISession } from "../types";
+import { debugLog } from "../utils/logger";
 
 const sourceBuildDashboardDirectory = path.resolve(__dirname, "../../dist/dashboard");
 const dashboardDirectory = existsSync(path.join(sourceBuildDashboardDirectory, "index.html"))
@@ -144,7 +145,19 @@ export default class DashboardServer {
         }
 
 
-        const token = this.authService.createSession(username)
+        let token: string;
+
+        try {
+            token = this.authService.createSession(username)
+        } catch (error) {
+            debugLog("Session creation failed", {
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ message: "Unable to create session" }));
+            return;
+        }
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.setHeader(
@@ -257,7 +270,17 @@ export default class DashboardServer {
             req.method === Config.REQUEST_METHOD.DELETE &&
             pathname === Config.DASHBOARD_API_ROUTES.TRACES
         ) {
-            this.storage.clearHistory();
+            try {
+                this.storage.clearHistory();
+            } catch (error) {
+                debugLog("History clear failed", {
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to clear history" }));
+                return;
+            }
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({
                 message: "Cleared history successfully!",
@@ -272,7 +295,22 @@ export default class DashboardServer {
             const traceId = decodeURIComponent(pathname.slice(
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
-            if (!this.storage.getTrace(traceId)) {
+            let traceExists: ReturnType<SQLiteStorage["getTrace"]>;
+
+            try {
+                traceExists = this.storage.getTrace(traceId);
+            } catch (error) {
+                debugLog("Trace lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace" }));
+                return;
+            }
+
+            if (!traceExists) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
                 res.end(JSON.stringify({
@@ -281,7 +319,18 @@ export default class DashboardServer {
                 return;
             }
 
-            this.storage.deleteTrace(traceId);
+            try {
+                this.storage.deleteTrace(traceId);
+            } catch (error) {
+                debugLog("Trace deletion failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to delete trace" }));
+                return;
+            }
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({
@@ -301,8 +350,20 @@ export default class DashboardServer {
                 .replace(/\/execution$/, "");
 
 
-            //  const trace = this.storage.getTrace(traceId)
-            const trace = this.storage.getTrace(traceId)
+            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+
+            try {
+                trace = this.storage.getTrace(traceId)
+            } catch (error) {
+                debugLog("Trace lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace" }));
+                return;
+            }
 
             if (!trace) {
                 res.statusCode = 404;
@@ -332,7 +393,20 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/request$/, "");
 
-            const trace = this.storage.getTrace(traceId)
+            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+
+            try {
+                trace = this.storage.getTrace(traceId)
+            } catch (error) {
+                debugLog("Trace lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace" }));
+                return;
+            }
             if (!trace) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
@@ -342,7 +416,20 @@ export default class DashboardServer {
                 return;
             }
 
-            const metadata = this.storage.getTraceMetadata(traceId)
+            let metadata: ReturnType<SQLiteStorage["getTraceMetadata"]>;
+
+            try {
+                metadata = this.storage.getTraceMetadata(traceId)
+            } catch (error) {
+                debugLog("Trace metadata lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace metadata" }));
+                return;
+            }
             const request = this.requestDetailMapper.map(trace, metadata);
             const user = metadata?.user;
 
@@ -364,7 +451,20 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/response$/, "");
 
-            const trace = this.storage.getTrace(traceId)
+            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+
+            try {
+                trace = this.storage.getTrace(traceId)
+            } catch (error) {
+                debugLog("Trace lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace" }));
+                return;
+            }
             if (!trace) {
                 res.statusCode = 404;
                 res.setHeader("Content-Type", "application/json");
@@ -374,7 +474,20 @@ export default class DashboardServer {
                 return;
             }
 
-            const metadata = this.storage.getTraceMetadata(traceId)
+            let metadata: ReturnType<SQLiteStorage["getTraceMetadata"]>;
+
+            try {
+                metadata = this.storage.getTraceMetadata(traceId)
+            } catch (error) {
+                debugLog("Trace metadata lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace metadata" }));
+                return;
+            }
             const response = this.responseDetailMapper.map(trace, metadata)
       const user = metadata?.user;
 
@@ -397,7 +510,20 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/errors$/, "");
 
-            const trace = this.storage.getTrace(traceId)
+            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+
+            try {
+                trace = this.storage.getTrace(traceId)
+            } catch (error) {
+                debugLog("Trace lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace" }));
+                return;
+            }
 
             if (!trace) {
                 res.statusCode = 404;
@@ -457,7 +583,20 @@ export default class DashboardServer {
                     return;
                 }
 
-                const trace = this.storage.getTrace(traceId);
+                let trace: ReturnType<SQLiteStorage["getTrace"]>;
+
+                try {
+                    trace = this.storage.getTrace(traceId);
+                } catch (error) {
+                    debugLog("Trace lookup failed", {
+                        traceId,
+                        errorName: error instanceof Error ? error.name : typeof error,
+                    });
+                    res.statusCode = 500;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({ message: "Unable to read trace" }));
+                    return;
+                }
 
                 if (!trace) {
                     res.statusCode = 404;
@@ -488,7 +627,20 @@ export default class DashboardServer {
                     return;
                 }
 
-                const details = this.storage.getHttpClientDetails(spanId);
+                let details: ReturnType<SQLiteStorage["getHttpClientDetails"]>;
+
+                try {
+                    details = this.storage.getHttpClientDetails(spanId);
+                } catch (error) {
+                    debugLog("HTTP client details lookup failed", {
+                        spanId,
+                        errorName: error instanceof Error ? error.name : typeof error,
+                    });
+                    res.statusCode = 500;
+                    res.setHeader("Content-Type", "application/json");
+                    res.end(JSON.stringify({ message: "Unable to read HTTP client details" }));
+                    return;
+                }
 
                 res.statusCode = 200;
                 res.setHeader("Content-Type", "application/json");
@@ -509,7 +661,20 @@ export default class DashboardServer {
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
 
-            const trace = this.storage.getTrace(traceId)
+            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+
+            try {
+                trace = this.storage.getTrace(traceId)
+            } catch (error) {
+                debugLog("Trace lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace" }));
+                return;
+            }
 
             if (!trace) {
                 res.statusCode = 404;
@@ -520,7 +685,20 @@ export default class DashboardServer {
                 return;
             }
 
-            const metadata = this.storage.getTraceMetadata(traceId);
+            let metadata: ReturnType<SQLiteStorage["getTraceMetadata"]>;
+
+            try {
+                metadata = this.storage.getTraceMetadata(traceId);
+            } catch (error) {
+                debugLog("Trace metadata lookup failed", {
+                    traceId,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace metadata" }));
+                return;
+            }
 
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json");
@@ -568,8 +746,22 @@ export default class DashboardServer {
                 return;
             }
 
-            const { summaries, total } = this.storage.getPaginatedTraceSummaries(page, limit);
-            const data = summaries.map(summary => ({
+            let summaries: ReturnType<SQLiteStorage["getPaginatedTraceSummaries"]>;
+
+            try {
+                summaries = this.storage.getPaginatedTraceSummaries(page, limit);
+            } catch (error) {
+                debugLog("Trace summary lookup failed", {
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read trace summaries" }));
+                return;
+            }
+
+            const { summaries: traceSummaries, total } = summaries;
+            const data = traceSummaries.map(summary => ({
                     id: summary.traceId,
                     method: summary.method ?? "UNKNOWN",
                     path: summary.path ?? "",

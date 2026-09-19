@@ -49,9 +49,16 @@ export class OutboundHttpCapture {
       request.getHeaders(),
     );
 
-    this.storage.updateHttpClientDetails(spanId, {
-      requestHeaders: headers,
-    });
+    try {
+      this.storage.updateHttpClientDetails(spanId, {
+        requestHeaders: headers,
+      });
+    } catch (error) {
+      debugLog("HTTP client request-header capture failed", {
+        spanId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
   }
 
   private captureNativeRequestBody(
@@ -77,12 +84,19 @@ export class OutboundHttpCapture {
       }
 
       if (chunks.length > 0) {
-        this.storage.updateHttpClientDetails(spanId, {
-          requestBody: this.parseBody(
-            Buffer.concat(chunks),
-            request.getHeader("content-type"),
-          ),
-        });
+        try {
+          this.storage.updateHttpClientDetails(spanId, {
+            requestBody: this.parseBody(
+              Buffer.concat(chunks),
+              request.getHeader("content-type"),
+            ),
+          });
+        } catch (error) {
+          debugLog("HTTP client request-body capture failed", {
+            spanId,
+            errorName: error instanceof Error ? error.name : typeof error,
+          });
+        }
       }
 
       return originalEnd(chunk, ...args);
@@ -97,9 +111,16 @@ export class OutboundHttpCapture {
       response.headers,
     );
 
-    this.storage.updateHttpClientDetails(spanId, {
-      responseHeaders: headers,
-    });
+    try {
+      this.storage.updateHttpClientDetails(spanId, {
+        responseHeaders: headers,
+      });
+    } catch (error) {
+      debugLog("HTTP client response-header capture failed", {
+        spanId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
   }
 
   private captureNativeResponseBody(
@@ -117,12 +138,19 @@ export class OutboundHttpCapture {
         return;
       }
 
-      this.storage.updateHttpClientDetails(spanId, {
-        responseBody: this.parseBody(
-          Buffer.concat(chunks),
-          response.headers["content-type"],
-        ),
-      });
+      try {
+        this.storage.updateHttpClientDetails(spanId, {
+          responseBody: this.parseBody(
+            Buffer.concat(chunks),
+            response.headers["content-type"],
+          ),
+        });
+      } catch (error) {
+        debugLog("HTTP client response-body capture failed", {
+          spanId,
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+      }
     });
   }
 
@@ -264,10 +292,17 @@ export class OutboundHttpCapture {
       );
     }
 
-    this.storage.updateHttpClientDetails(spanId, {
-      requestHeaders,
-      requestBody,
-    });
+    try {
+      this.storage.updateHttpClientDetails(spanId, {
+        requestHeaders,
+        requestBody,
+      });
+    } catch (error) {
+      debugLog("Fetch request capture failed", {
+        spanId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
     debugLog("Fetch request details captured", { spanId });
   }
 
@@ -290,10 +325,17 @@ export class OutboundHttpCapture {
       );
     }
 
-    this.storage.updateHttpClientDetails(spanId, {
-      responseHeaders,
-      responseBody,
-    });
+    try {
+      this.storage.updateHttpClientDetails(spanId, {
+        responseHeaders,
+        responseBody,
+      });
+    } catch (error) {
+      debugLog("Fetch response capture failed", {
+        spanId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
     debugLog("Fetch response details captured", {
       spanId,
       statusCode: response.status,

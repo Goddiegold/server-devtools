@@ -120,7 +120,14 @@ class ServerDevTools {
                     }
                 }
 
-                storage.saveResponseBody(traceId, body)
+                try {
+                    storage.saveResponseBody(traceId, body)
+                } catch (error) {
+                    debugLog("Response body capture failed", {
+                        traceId,
+                        errorName: error instanceof Error ? error.name : typeof error,
+                    });
+                }
                 return originalEndFunc.apply(this, args);
             }) as typeof res.end;
 
