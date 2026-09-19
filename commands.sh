@@ -64,6 +64,26 @@ curl http://localhost:3000/users/fetch
 curl http://localhost:3000/users/combined/123
 curl http://localhost:3000/users/broken
 
+curl -i http://localhost:4000/hello
+
+curl -i -X POST http://localhost:4000/users \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Test User","email":"test@example.com"}'
+
+curl -i http://localhost:4000/slow
+
+curl -i http://localhost:4000/not-found
+
+curl -i http://localhost:4000/external
+
+curl -i http://localhost:4000/sensitive-test
+
+curl -i http://localhost:4000/mongo-test
+
+curl -i http://localhost:4000/error
+
+curl -i http://localhost:4000/_devtools
+
 npm run build
 npm pack
 npm install ../server-devtool/server-devtools-0.1.0.tgz
