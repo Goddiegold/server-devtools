@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
+import Config from "../config";
 
 
 interface ISessionRow {
@@ -109,9 +110,7 @@ export default class SQLiteStorage {
     private initialize(): void {
         const version = this.getSchemaVersion();
 
-        console.log("Schema version:", version);
-
-        if (version === 1) {
+        if (version === Config.STORAGE.SCHEMA_VERSION) {
             return;
         }
 

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { tmpdir } from "node:os";
 
 import SQLiteStorage from "../src/storage/sqlite-storage";
 import EncryptDecryptService from "../src/security/encrypt-decrypt.service";
@@ -263,6 +265,220 @@ assert.equal(storage.getTrace("trace-after-clear")?.traceId, "trace-after-clear"
 assert.equal(storage.getTraceSummaries().length, 1);
 
 storage.close();
+
+/**
+ * Schema version and migration tests
+ */
+
+function createTemporaryDatabasePath(prefix: string): {
+    directory: string;
+    path: string;
+} {
+    const directory = mkdtempSync(join(tmpdir(), prefix));
+
+    return {
+        directory,
+        path: join(directory, "storage.db"),
+    };
+}
+
+function getTableColumns(
+    database: DatabaseSync,
+    tableName: string,
+): string[] {
+    const rows = database
+        .prepare(`PRAGMA table_info(${tableName})`)
+        .all() as { name: string }[];
+
+    return rows.map(row => row.name);
+}
+
+function getUserVersion(database: DatabaseSync): number {
+    const row = database
+        .prepare("PRAGMA user_version")
+        .get() as { user_version: number };
+
+    return row.user_version;
+}
+
+function getTableNames(database: DatabaseSync): string[] {
+    const rows = database
+        .prepare(`
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+        `)
+        .all() as { name: string }[];
+
+    return rows.map(row => row.name);
+}
+
+{
+    const temporaryDatabase = createTemporaryDatabasePath(
+        "server-devtools-fresh-",
+    );
+
+    try {
+        const storage = new SQLiteStorage(temporaryDatabase.path);
+        storage.close();
+
+        const database = new DatabaseSync(temporaryDatabase.path);
+
+        assert.equal(getUserVersion(database), 1);
+
+        const tableNames = getTableNames(database);
+
+        for (const tableName of [
+            "spans",
+            "traces",
+            "trace_metadata",
+            "sessions",
+            "http_client_details",
+        ]) {
+            assert.ok(tableNames.includes(tableName));
+        }
+
+        assert.ok(getTableColumns(database, "trace_metadata").includes("user_json"));
+
+        database.close();
+    } finally {
+        rmSync(temporaryDatabase.directory, { recursive: true, force: true });
+    }
+}
+
+{
+    const temporaryDatabase = createTemporaryDatabasePath(
+        "server-devtools-legacy-",
+    );
+    const legacyDatabase = new DatabaseSync(temporaryDatabase.path);
+
+    legacyDatabase.exec(`
+        PRAGMA user_version = 0;
+
+        CREATE TABLE traces (
+            trace_id TEXT PRIMARY KEY,
+            root_span_id TEXT,
+            started_at INTEGER NOT NULL,
+            duration_ms REAL,
+            method TEXT,
+            path TEXT,
+            route TEXT,
+            status_code INTEGER,
+            has_error INTEGER NOT NULL DEFAULT 0,
+            user_json TEXT,
+            created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE trace_metadata (
+            trace_id TEXT PRIMARY KEY,
+            request_body TEXT,
+            response_body TEXT
+        );
+
+        INSERT INTO traces (
+            trace_id,
+            root_span_id,
+            started_at,
+            duration_ms,
+            method,
+            path,
+            route,
+            status_code,
+            has_error,
+            user_json,
+            created_at
+        ) VALUES (
+            'legacy-trace',
+            'legacy-root',
+            1234,
+            25,
+            'GET',
+            '/legacy',
+            '/legacy',
+            200,
+            0,
+            '{"email":"legacy@example.com"}',
+            1234
+        );
+    `);
+    assert.equal(getUserVersion(legacyDatabase), 0);
+    legacyDatabase.close();
+
+    try {
+        const storage = new SQLiteStorage(temporaryDatabase.path);
+        const database = new DatabaseSync(temporaryDatabase.path);
+
+        assert.equal(getUserVersion(database), 1);
+        assert.equal(
+            database
+                .prepare("SELECT path FROM traces WHERE trace_id = ?")
+                .get("legacy-trace")
+                ?.path,
+            "/legacy",
+        );
+        assert.equal(
+            getTableColumns(database, "traces").includes("user_json"),
+            false,
+        );
+        assert.ok(getTableColumns(database, "trace_metadata").includes("user_json"));
+
+        for (const tableName of [
+            "spans",
+            "traces",
+            "trace_metadata",
+            "sessions",
+            "http_client_details",
+        ]) {
+            assert.ok(getTableNames(database).includes(tableName));
+        }
+
+        assert.equal(storage.getTraceSummaries()[0]?.traceId, "legacy-trace");
+
+        storage.close();
+        database.close();
+    } finally {
+        rmSync(temporaryDatabase.directory, { recursive: true, force: true });
+    }
+}
+
+{
+    const temporaryDatabase = createTemporaryDatabasePath(
+        "server-devtools-versioned-",
+    );
+
+    try {
+        const storage = new SQLiteStorage(temporaryDatabase.path);
+        storage.saveTraceSummary({
+            traceId: "versioned-trace",
+            spanId: "versioned-root",
+            type: "http.server",
+            name: "GET /versioned",
+            startedAt: 4321,
+            durationMs: 12,
+            attributes: {
+                "http.request.method": "GET",
+            },
+            status: {
+                code: 0,
+            },
+        });
+        storage.close();
+
+        const reopenedStorage = new SQLiteStorage(temporaryDatabase.path);
+        const database = new DatabaseSync(temporaryDatabase.path);
+
+        assert.equal(getUserVersion(database), 1);
+        assert.equal(
+            reopenedStorage.getTraceSummaries()[0]?.traceId,
+            "versioned-trace",
+        );
+
+        reopenedStorage.close();
+        database.close();
+    } finally {
+        rmSync(temporaryDatabase.directory, { recursive: true, force: true });
+    }
+}
 
 /**
  * Encryption-at-rest tests

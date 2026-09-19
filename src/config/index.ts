@@ -22,4 +22,7 @@ export default {
         "authorization",
         "cookie",
     ],
+    STORAGE: {
+        SCHEMA_VERSION: 1
+    }
 }
