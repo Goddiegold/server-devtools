@@ -1,14 +1,12 @@
 {
   "name": "server-devtools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chrome DevTools for your backend. Inspect HTTP requests, database operations, outbound calls, errors, and execution timing from an embedded dashboard.",
-"license": "Apache-2.0",
+  "license": "Apache-2.0",
   "author": "Godwin Ehikhamhen",
   "type": "commonjs",
-
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
-
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -21,23 +19,20 @@
       "default": "./dist/src/nestjs.js"
     }
   },
-
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
-
- "scripts": {
-  "clean": "rm -rf dist",
-  "build:sdk": "tsc -p tsconfig.build.json && node scripts/finalize-commonjs-entry.cjs",
-  "build:dashboard": "npm --prefix dashboard run build",
-  "build": "npm run clean && npm run build:sdk && npm run build:dashboard",
-  "test": "tsx --test tests/*.test.ts",
-  "typecheck": "tsc --noEmit",
-  "prepublishOnly": "npm run test && npm run typecheck && npm run build"
-},
-
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build:sdk": "tsc -p tsconfig.build.json && node scripts/finalize-commonjs-entry.cjs",
+    "build:dashboard": "npm --prefix dashboard run build",
+    "build": "npm run clean && npm run build:sdk && npm run build:dashboard",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run test && npm run typecheck && npm run build"
+  },
   "keywords": [
     "nodejs",
     "debugging",
@@ -50,11 +45,9 @@
     "nestjs",
     "mongodb"
   ],
-
   "engines": {
     "node": ">=20"
   },
-
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.79.0",
@@ -65,7 +58,6 @@
     "@opentelemetry/sdk-node": "^0.221.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0"
   },
-
   "devDependencies": {
     "@nestjs/common": "^11.2.3",
     "@nestjs/core": "^11.2.3",
