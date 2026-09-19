@@ -314,6 +314,29 @@ Make requests to your application and they will appear in the dashboard.
 
 ------------------------------------------------------------------------
 
+## Examples
+
+Working example applications are available if you want to see ServerDevTools
+integrated into a real project.
+
+### Express + TypeScript
+
+[server-devtools-express-ts](https://github.com/Goddiegold/server-devtools-express-ts)
+
+A minimal Express + TypeScript application showing ServerDevTools
+initialization, preloading, middleware mounting, encryption configuration,
+current-user capture, and request inspection.
+
+### NestJS
+
+[server-devtools-nestjs-test](https://github.com/Goddiegold/server-devtools-nestjs-test)
+
+A minimal NestJS application showing the ServerDevTools preload setup,
+middleware integration, NestJS error interceptor, encryption configuration,
+current-user capture, and request inspection.
+
+------------------------------------------------------------------------
+
 ## Request Inspector
 
 Inspect the incoming request, including:

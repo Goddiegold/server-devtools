@@ -490,8 +490,14 @@ await devtools.start();
 import { createServer } from "node:http";
 import { devtools } from "../server-devtools";
 
-createServer((req, res) =&gt; devtools.middleware(req, res, () =&gt; res.end()))
-  .listen(3000);
+const server = createServer((req, res) =&gt; {
+  devtools.middleware(req, res, () =&gt; {
+    res.statusCode = 404;
+    res.end("Not found");
+  });
+});
+
+server.listen(3000);
 
 tsx watch --import ./server-devtools.ts src/main.ts</code></pre>
 </section>
@@ -518,12 +524,17 @@ import { devtools } from "../server-devtools";
 
 const app = express();
 app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
+
+app.get("/users/:id", async (req, res) =&gt; {
+  res.json({ id: req.params.id, name: "John Doe" });
+});
+
 app.listen(3000);
 
 tsx watch --import ./server-devtools.ts src/main.ts</code></pre>
 </section>
 <section id="panel-nest" role="tabpanel" aria-labelledby="tab-nest" data-integration-panel="nest" class="min-w-0" hidden>
-<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.js (outside src)
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.js
 const ServerDevTools = require("server-devtools");
 const devtools = new ServerDevTools({
   auth: {
@@ -536,29 +547,47 @@ const devtools = new ServerDevTools({
   getCurrentUser: (req) =&gt; req.user,
 });
 globalThis.__serverDevtools = devtools;
-void (async () =&gt; { await devtools.start(); })();
+
+void (async () =&gt; {
+  await devtools.start();
+})();
 
 // tsconfig.json
-{ "compilerOptions": { "allowJs": true } }
+{
+  "compilerOptions": {
+    "allowJs": true
+  }
+}
+
+NODE_OPTIONS='--import ./server-devtools.js' nest start --watch
 
 // src/main.ts
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ServerDevToolsNestInterceptor } from "server-devtools/nestjs";
 import ServerDevTools from "server-devtools";
-declare global { var __serverDevtools: ServerDevTools | undefined; }
+
+declare global {
+  var __serverDevtools: ServerDevTools | undefined;
+}
 
 async function bootstrap() {
   const devtools = globalThis.__serverDevtools;
-  if (!devtools) throw new Error("ServerDevTools was not preloaded");
+  if (!devtools) {
+    throw new Error(
+      "ServerDevTools was not preloaded. Start Nest with NODE_OPTIONS='--import ./server-devtools.js'.",
+    );
+  }
+
   const app = await NestFactory.create(AppModule);
   app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
-  app.useGlobalInterceptors(new ServerDevToolsNestInterceptor());
+  app.useGlobalInterceptors(
+    new ServerDevToolsNestInterceptor(),
+  );
   await app.listen(3000);
 }
-bootstrap();
 
-NODE_OPTIONS='--import ./server-devtools.js' nest start --watch</code></pre>
+bootstrap();</code></pre>
 </section>
 <div class="px-4 py-2.5 bg-surface-container-low/50 flex flex-wrap items-center justify-between gap-2 font-code-sm text-code-sm text-on-surface-variant">
 <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary"></span><span>Preload initializes instrumentation before application imports.</span></div>
@@ -626,6 +655,48 @@ NODE_OPTIONS='--import ./server-devtools.js' nest start --watch</code></pre>
 })();
 </script>
 </div>
+</div>
+</div>
+</section>
+<!-- Working Examples Section -->
+<section class="w-full py-14 px-6 lg:px-12 bg-surface-container-low/60">
+<div class="max-w-5xl mx-auto">
+<div class="text-center max-w-2xl mx-auto mb-8">
+<span class="font-code-sm text-code-sm text-primary uppercase font-semibold tracking-wider">Examples</span>
+<h2 class="font-headline-lg text-headline-lg md:text-[28px] md:leading-[34px] font-semibold text-on-surface mt-1 mb-3">Working Examples</h2>
+<p class="font-body-base text-body-base text-on-surface-variant">Start from a working integration or use it as a reference for your own application.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+<article class="p-5 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between gap-5">
+<div>
+<div class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center text-primary mb-3">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24" aria-hidden="true">
+<path clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold mb-1">Express + TypeScript</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Minimal Express + TypeScript integration with ServerDevTools.</p>
+</div>
+<a class="h-9 px-4 rounded bg-inverse-surface text-inverse-on-surface font-body-medium text-body-medium inline-flex items-center justify-center gap-2 hover:bg-on-surface transition-colors self-start" href="https://github.com/Goddiegold/server-devtools-express-ts" target="_blank" rel="noreferrer">
+<span>View Example</span>
+<span class="material-symbols-outlined text-[16px]">open_in_new</span>
+</a>
+</article>
+<article class="p-5 rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between gap-5">
+<div>
+<div class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center text-primary mb-3">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24" aria-hidden="true">
+<path clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272-.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold mb-1">NestJS</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Minimal NestJS integration with the recommended ServerDevTools preload setup.</p>
+</div>
+<a class="h-9 px-4 rounded bg-inverse-surface text-inverse-on-surface font-body-medium text-body-medium inline-flex items-center justify-center gap-2 hover:bg-on-surface transition-colors self-start" href="https://github.com/Goddiegold/server-devtools-nestjs-test" target="_blank" rel="noreferrer">
+<span>View Example</span>
+<span class="material-symbols-outlined text-[16px]">open_in_new</span>
+</a>
+</article>
 </div>
 </div>
 </section>
