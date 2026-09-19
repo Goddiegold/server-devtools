@@ -66,3 +66,4 @@ curl http://localhost:3000/users/broken
 
 npm run build
 npm pack
+npm install ../server-devtool/server-devtools-0.1.0.tgz

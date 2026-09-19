@@ -28,9 +28,11 @@ export default class SQLiteStorage {
         return row.user_version;
     }
 
-    private initialize(): void {
-        console.log("Schema version:", this.getSchemaVersion());
-        
+    private setSchemaVersion(version: number): void {
+        this.db.exec(`PRAGMA user_version = ${version}`);
+    }
+
+    private initializeV1Schema(): void {
         this.db.exec(`
         CREATE TABLE IF NOT EXISTS spans (
             span_id TEXT PRIMARY KEY,
@@ -71,31 +73,43 @@ export default class SQLiteStorage {
             user_json TEXT
         );
 
-       CREATE TABLE IF NOT EXISTS sessions (
-           session_hash TEXT PRIMARY KEY,
-           username TEXT NOT NULL,
-           created_at INTEGER NOT NULL,
-           expires_at INTEGER NOT NULL
-       );
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_hash TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL
+        );
 
-       CREATE TABLE IF NOT EXISTS http_client_details (
-           span_id TEXT PRIMARY KEY,
-           request_headers TEXT,
-           request_body TEXT,
-           response_headers TEXT,
-           response_body TEXT
-       );
+        CREATE TABLE IF NOT EXISTS http_client_details (
+            span_id TEXT PRIMARY KEY,
+            request_headers TEXT,
+            request_body TEXT,
+            response_headers TEXT,
+            response_body TEXT
+        );
     `);
 
-        const traceColumns = this.db.prepare(`PRAGMA table_info(traces)`).all() as { name: string }[];
+        const traceColumns = this.db
+            .prepare(`PRAGMA table_info(traces)`)
+            .all() as { name: string }[];
+
         if (traceColumns.some(column => column.name === "user_json")) {
             this.db.exec(`ALTER TABLE traces DROP COLUMN user_json`);
         }
 
-        const metadataColumns = this.db.prepare(`PRAGMA table_info(trace_metadata)`).all() as { name: string }[];
+        const metadataColumns = this.db
+            .prepare(`PRAGMA table_info(trace_metadata)`)
+            .all() as { name: string }[];
+
         if (!metadataColumns.some(column => column.name === "user_json")) {
             this.db.exec(`ALTER TABLE trace_metadata ADD COLUMN user_json TEXT`);
         }
+    }
+
+    private initialize(): void {
+        console.log("Schema version:", this.getSchemaVersion());
+
+        this.initializeV1Schema();
     }
 
     private deserializeSensitiveValue<T>(value: string): T {
