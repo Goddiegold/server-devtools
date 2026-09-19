@@ -470,7 +470,7 @@
 </button>
 </div>
 <section id="panel-node" role="tabpanel" aria-labelledby="tab-node" data-integration-panel="node" class="min-w-0">
-<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts (example filename; choose your own)
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts
 import ServerDevTools from "server-devtools";
 
 export const devtools = new ServerDevTools({
@@ -478,6 +478,10 @@ export const devtools = new ServerDevTools({
     username: process.env.SERVER_DEVTOOLS_USERNAME!,
     password: process.env.SERVER_DEVTOOLS_PASSWORD!,
   },
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+  },
+  getCurrentUser: (req) =&gt; req.user,
 });
 
 await devtools.start();
@@ -486,22 +490,13 @@ await devtools.start();
 import { createServer } from "node:http";
 import { devtools } from "../server-devtools";
 
-const server = createServer((req, res) =&gt; {
-  devtools.middleware(req, res, () =&gt; {
-    res.statusCode = 404;
-    res.end("Not found");
-  });
-});
-server.listen(3000);
+createServer((req, res) =&gt; devtools.middleware(req, res, () =&gt; res.end()))
+  .listen(3000);
 
-# Development
-npx tsx --import ./server-devtools.ts src/main.ts
-
-# Production
-node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
+tsx watch --import ./server-devtools.ts src/main.ts</code></pre>
 </section>
 <section id="panel-express" role="tabpanel" aria-labelledby="tab-express" data-integration-panel="express" class="min-w-0" hidden>
-<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts (example filename; choose your own)
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts
 import ServerDevTools from "server-devtools";
 
 export const devtools = new ServerDevTools({
@@ -509,6 +504,10 @@ export const devtools = new ServerDevTools({
     username: process.env.SERVER_DEVTOOLS_USERNAME!,
     password: process.env.SERVER_DEVTOOLS_PASSWORD!,
   },
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+  },
+  getCurrentUser: (req) =&gt; req.user,
 });
 
 await devtools.start();
@@ -519,53 +518,47 @@ import { devtools } from "../server-devtools";
 
 const app = express();
 app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
-
-app.get("/users/:id", async (req, res) =&gt; {
-  res.json({ id: req.params.id });
-});
-
 app.listen(3000);
 
-# Development
-npx tsx --import ./server-devtools.ts src/main.ts
-
-# Production
-node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
+tsx watch --import ./server-devtools.ts src/main.ts</code></pre>
 </section>
 <section id="panel-nest" role="tabpanel" aria-labelledby="tab-nest" data-integration-panel="nest" class="min-w-0" hidden>
-<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.ts (example filename; choose your own)
-import ServerDevTools from "server-devtools";
-
-export const devtools = new ServerDevTools({
+<pre class="m-0 p-5 font-code-sm text-code-sm leading-relaxed text-on-surface bg-surface-container-lowest overflow-x-auto whitespace-pre"><code>// server-devtools.js (outside src)
+const ServerDevTools = require("server-devtools");
+const devtools = new ServerDevTools({
   auth: {
-    username: process.env.SERVER_DEVTOOLS_USERNAME!,
-    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+    username: process.env.SERVER_DEVTOOLS_USERNAME,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD,
   },
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY,
+  },
+  getCurrentUser: (req) =&gt; req.user,
 });
+globalThis.__serverDevtools = devtools;
+void (async () =&gt; { await devtools.start(); })();
 
-await devtools.start();
+// tsconfig.json
+{ "compilerOptions": { "allowJs": true } }
 
 // src/main.ts
-import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
-import { devtools } from "../server-devtools";
 import { ServerDevToolsNestInterceptor } from "server-devtools/nestjs";
+import ServerDevTools from "server-devtools";
+declare global { var __serverDevtools: ServerDevTools | undefined; }
 
 async function bootstrap() {
+  const devtools = globalThis.__serverDevtools;
+  if (!devtools) throw new Error("ServerDevTools was not preloaded");
   const app = await NestFactory.create(AppModule);
   app.use((req, res, next) =&gt; devtools.middleware(req, res, next));
   app.useGlobalInterceptors(new ServerDevToolsNestInterceptor());
   await app.listen(3000);
 }
-
 bootstrap();
 
-# Development
-npx tsx --import ./server-devtools.ts src/main.ts
-
-# Production
-node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
+NODE_OPTIONS='--import ./server-devtools.js' nest start --watch</code></pre>
 </section>
 <div class="px-4 py-2.5 bg-surface-container-low/50 flex flex-wrap items-center justify-between gap-2 font-code-sm text-code-sm text-on-surface-variant">
 <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-secondary"></span><span>Preload initializes instrumentation before application imports.</span></div>
@@ -750,4 +743,4 @@ node --import ./dist/server-devtools.js ./dist/main.js</code></pre>
 </div>
 </div>
 </section>
-</div></main><footer class="w-full bg-surface-container-lowest border-t border-outline-variant/40 py-space-2xl"><div class="max-w-7xl mx-auto px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-space-xl"><div class="flex flex-col items-center md:items-start gap-space-2xs text-center md:text-left"><div class="flex items-center gap-space-sm"><span class="font-headline-sm text-headline-sm text-on-surface">ServerDevTools</span><span class="font-label-xs text-label-xs px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">Open Source</span></div><p class="font-body-sm text-body-sm text-on-surface-variant">An open-source inspection tool for Node.js backends. Built for developers.</p></div><div class="flex flex-wrap items-center justify-center gap-space-lg"><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="github" href="https://github.com/Goddiegold/server-devtools">GitHub</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="docs" href="https://github.com/Goddiegold/server-devtools#readme">Documentation</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="install" href="#get-started">Install</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="license" href="https://github.com/Goddiegold/server-devtools#license">License (ISC)</a></div></div></footer></body></html>
+</div></main><footer class="w-full bg-surface-container-lowest border-t border-outline-variant/40 py-space-2xl"><div class="max-w-7xl mx-auto px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-space-xl"><div class="flex flex-col items-center md:items-start gap-space-2xs text-center md:text-left"><div class="flex items-center gap-space-sm"><span class="font-headline-sm text-headline-sm text-on-surface">ServerDevTools</span><span class="font-label-xs text-label-xs px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">Open Source</span></div><p class="font-body-sm text-body-sm text-on-surface-variant">An open-source inspection tool for Node.js backends. Built for developers.</p></div><div class="flex flex-wrap items-center justify-center gap-space-lg"><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="github" href="https://github.com/Goddiegold/server-devtools">GitHub</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="docs" href="https://github.com/Goddiegold/server-devtools#readme">Documentation</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="install" href="#get-started">Install</a><a class="font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors" data-path="license" href="https://github.com/Goddiegold/server-devtools#license">License (Apache-2.0)</a></div></div></footer></body></html>

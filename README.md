@@ -83,19 +83,47 @@ full production observability platforms.
 npm install server-devtools
 ```
 
-> Package installation instructions may change before the first public
-> release.
-
 ------------------------------------------------------------------------
 
 ## Quick Start
 
-Create an initialization file that constructs and starts your own instance.
-The filename and location are up to you; `server-devtools.ts` is used here as
-an example.
+ServerDevTools uses an authenticated, optionally encrypted initialization file.
+Keep the credentials and encryption key in environment variables.
+
+The encryption key must be a base64-encoded 32-byte key. Generate one with:
+
+```sh
+node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64"))'
+```
+
+`fields` is optional. By default, ServerDevTools encrypts these field names:
+
+- `password`
+- `accessToken`
+- `refreshToken`
+- `authorization`
+- `cookie`
+
+Specifying `fields` replaces the default list; it does not extend it.
+
+To customize the encrypted fields:
 
 ```ts
-// server-devtools.ts (example filename; choose your own)
+encryption: {
+  key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
+  fields: ["password", "authorization", "apiKey"],
+},
+```
+
+`getCurrentUser` is optional. Use it when your application already exposes the
+authenticated user on the request; ServerDevTools does not require a
+Passport, JWT, or other authentication framework.
+
+### Node.js / Express TypeScript
+
+Create `server-devtools.ts`:
+
+```ts
 import ServerDevTools from "server-devtools";
 
 export const devtools = new ServerDevTools({
@@ -103,47 +131,14 @@ export const devtools = new ServerDevTools({
     username: process.env.SERVER_DEVTOOLS_USERNAME!,
     password: process.env.SERVER_DEVTOOLS_PASSWORD!,
   },
-  // Optional: encrypt selected captured fields in SQLite.
   encryption: {
     key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY!,
-    fields: ["authorization", "password", "token"],
   },
+  getCurrentUser: (req) => req.user,
 });
 
 await devtools.start();
 ```
-
-### Encrypt sensitive data
-
-ServerDevTools stores captured request/response data and inspection history in
-SQLite. The optional `encryption` setting encrypts matching sensitive values
-before they are persisted and decrypts them when authorized users inspect them
-in the dashboard. This protects data at rest; it does not change application
-payloads or transport behavior and does not replace normal application security.
-
-- `key` is a base64-encoded key that decodes to exactly 32 bytes. ServerDevTools
-  uses it with AES-256-GCM. Keep it in an environment variable or secrets
-  manager; do not hardcode it.
-- `fields` lists object field names to protect. Matching is case-insensitive
-  and recursive through captured objects and arrays. When `fields` is omitted,
-  the defaults are `password`, `accessToken`, `refreshToken`, `authorization`,
-  and `cookie`. Specifying `fields` overrides that entire default list; the
-  defaults are not added to your custom list.
-
-Generate a key with Node.js:
-
-```sh
-node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64"))'
-```
-
-Preload the initialization file before your application entry point so
-instrumentation starts before application modules load. In the examples below,
-adjust the paths to match your own initialization file and entry point.
-Preloading is required because ServerDevTools/OpenTelemetry must initialize
-before instrumented dependencies such as MongoDB are loaded.
-
-<details open>
-<summary>Node.js / TypeScript</summary>
 
 ```ts
 // src/main.ts
@@ -161,17 +156,10 @@ server.listen(3000);
 ```
 
 ```sh
-# Development
-npx tsx --import ./server-devtools.ts src/main.ts
-
-# Production
-node --import ./dist/server-devtools.js ./dist/main.js
+tsx watch --import ./server-devtools.ts src/main.ts
 ```
 
-</details>
-
-<details>
-<summary>Express</summary>
+The application can import the same instance normally and mount it in Express:
 
 ```ts
 // src/main.ts
@@ -188,45 +176,126 @@ app.get("/users/:id", async (req, res) => {
 app.listen(3000);
 ```
 
-```sh
-# Development
-npx tsx --import ./server-devtools.ts src/main.ts
+### Node.js / Express JavaScript
 
-# Production
-node --import ./dist/server-devtools.js ./dist/main.js
+For JavaScript projects, create `server-devtools.js`:
+
+```js
+const ServerDevTools = require("server-devtools");
+
+const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD,
+  },
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY,
+  },
+  getCurrentUser: (req) => req.user,
+});
+
+module.exports = { devtools };
+
+void devtools.start();
 ```
 
-</details>
+Preload the JavaScript file normally:
 
-<details>
-<summary>NestJS</summary>
+```sh
+node --import ./server-devtools.js src/main.js
+```
+
+In the application, import the same instance and mount it with:
+
+```js
+const express = require("express");
+const { devtools } = require("../server-devtools.js");
+
+const app = express();
+app.use((req, res, next) => devtools.middleware(req, res, next));
+app.listen(3000);
+```
+
+JavaScript projects do not need `allowJs`.
+
+### NestJS
+
+NestJS uses a different preload pattern. Create a plain `server-devtools.js`
+outside `src`:
+
+```js
+const ServerDevTools = require("server-devtools");
+
+const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD,
+  },
+  encryption: {
+    key: process.env.SERVER_DEVTOOLS_ENCRYPTION_KEY,
+  },
+  getCurrentUser: (req) => req.user,
+});
+
+globalThis.__serverDevtools = devtools;
+
+void (async () => {
+  await devtools.start();
+})();
+```
+
+Enable JavaScript files in the Nest TypeScript configuration:
+
+```json
+{
+  "compilerOptions": {
+    "allowJs": true
+  }
+}
+```
+
+Start Nest with the preload file:
+
+```sh
+NODE_OPTIONS='--import ./server-devtools.js' nest start --watch
+```
+
+Do not create another `ServerDevTools` instance in `main.ts`. Retrieve the
+preloaded instance instead:
 
 ```ts
 // src/main.ts
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
-import { devtools } from "../server-devtools";
 import { ServerDevToolsNestInterceptor } from "server-devtools/nestjs";
+import ServerDevTools from "server-devtools";
+
+declare global {
+  var __serverDevtools: ServerDevTools | undefined;
+}
 
 async function bootstrap() {
+  const devtools = globalThis.__serverDevtools;
+  if (!devtools) {
+    throw new Error(
+      "ServerDevTools was not preloaded. Start Nest with NODE_OPTIONS='--import ./server-devtools.js'.",
+    );
+  }
+
   const app = await NestFactory.create(AppModule);
   app.use((req, res, next) => devtools.middleware(req, res, next));
-  app.useGlobalInterceptors(new ServerDevToolsNestInterceptor());
+  app.useGlobalInterceptors(
+    new ServerDevToolsNestInterceptor(),
+  );
   await app.listen(3000);
 }
 
 bootstrap();
 ```
 
-```sh
-# Development
-npx tsx --import ./server-devtools.ts src/main.ts
-
-# Production
-node --import ./dist/server-devtools.js ./dist/main.js
-```
-
-</details>
+This Nest-specific pattern initializes instrumentation before Nest and
+application dependencies load, while avoiding a second ServerDevTools
+initialization during watch mode.
 
 Each example imports and mounts the same instance that was started by the
 preloaded initialization file. Its middleware serves the dashboard from the
@@ -416,7 +485,7 @@ Near-term:
 -   [ ] Body-size limits
 -   [ ] Production-safe configuration
 -   [ ] Broader NestJS compatibility
--   [ ] Static dashboard packaging
+-   [x] Static dashboard packaging
 
 Future ideas:
 
@@ -472,4 +541,4 @@ Issues, ideas, bug reports, and contributions are welcome.
 
 ## License
 
-ISC
+Apache-2.0
