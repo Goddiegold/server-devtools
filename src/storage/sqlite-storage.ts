@@ -107,9 +107,27 @@ export default class SQLiteStorage {
     }
 
     private initialize(): void {
-        console.log("Schema version:", this.getSchemaVersion());
+        const version = this.getSchemaVersion();
 
-        this.initializeV1Schema();
+        console.log("Schema version:", version);
+
+        if (version === 1) {
+            return;
+        }
+
+        if (version === 0) {
+            this.db.exec("BEGIN");
+
+            try {
+                this.initializeV1Schema();
+                this.setSchemaVersion(1);
+
+                this.db.exec("COMMIT");
+            } catch (error) {
+                this.db.exec("ROLLBACK");
+                throw error;
+            }
+        }
     }
 
     private deserializeSensitiveValue<T>(value: string): T {
