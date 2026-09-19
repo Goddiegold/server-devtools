@@ -20,7 +20,17 @@ export default class SQLiteStorage {
         this.initialize();
     }
 
+    private getSchemaVersion(): number {
+        const row = this.db
+            .prepare("PRAGMA user_version")
+            .get() as { user_version: number };
+
+        return row.user_version;
+    }
+
     private initialize(): void {
+        console.log("Schema version:", this.getSchemaVersion());
+        
         this.db.exec(`
         CREATE TABLE IF NOT EXISTS spans (
             span_id TEXT PRIMARY KEY,
@@ -652,7 +662,7 @@ export default class SQLiteStorage {
     `)
             .run(...values);
     }
-    
+
     getHttpClientDetails(
         spanId: string,
     ): IHttpClientDetails | undefined {
