@@ -1,6 +1,6 @@
 {
   "name": "server-devtools",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Chrome DevTools for your backend. Inspect HTTP requests, database operations, outbound calls, errors, and execution timing from an embedded dashboard.",
   "license": "Apache-2.0",
   "author": "Godwin Ehikhamhen",
