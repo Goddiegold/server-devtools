@@ -50,11 +50,13 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "^2.11.0",
     "@opentelemetry/instrumentation-express": "^0.69.0",
+    "@opentelemetry/instrumentation-http": "^0.222.0",
     "@opentelemetry/instrumentation-mongodb": "^0.74.0",
     "@opentelemetry/instrumentation-undici": "^0.31.0",
-    "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0"
   },
   "devDependencies": {

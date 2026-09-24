@@ -364,17 +364,58 @@ export default class SQLiteStorage {
         });
     }
 
-    getPaginatedTraceSummaries(page: number, limit: number): {
+    getPaginatedTraceSummaries(
+        page: number,
+        limit: number,
+        search = "",
+        method?: string,
+        statusCode?: number,
+    ): {
         summaries: ITraceSummary[];
         total: number;
     } {
         const offset = (page - 1) * limit;
+        const conditions: string[] = [];
+        const parameters: (string | number)[] = [];
+        const normalizedSearch = search.trim();
+        if (normalizedSearch) {
+            conditions.push(`(
+                t.path LIKE ? COLLATE NOCASE ESCAPE '\\'
+                OR t.route LIKE ? COLLATE NOCASE ESCAPE '\\'
+                OR EXISTS (
+                    SELECT 1
+                    FROM spans s
+                    WHERE s.trace_id = t.trace_id
+                      AND s.span_id = t.root_span_id
+                      AND s.name LIKE ? COLLATE NOCASE ESCAPE '\\'
+                )
+            )`);
+            const escapedSearch = normalizedSearch.replace(/[\\%_]/g, character => `\\${character}`);
+            const searchPattern = `%${escapedSearch}%`;
+            parameters.push(searchPattern, searchPattern, searchPattern);
+        }
+
+        const normalizedMethod = method?.trim();
+        if (normalizedMethod) {
+            conditions.push("t.method = ? COLLATE NOCASE");
+            parameters.push(normalizedMethod);
+        }
+
+        if (statusCode !== undefined) {
+            conditions.push("t.status_code = ?");
+            parameters.push(statusCode);
+        }
+
+        const whereClause = conditions.length > 0
+            ? `WHERE ${conditions.join(" AND ")}`
+            : "";
         const totalRow = this.db.prepare(`
         SELECT COUNT(*) AS total
         FROM traces t
         LEFT JOIN trace_metadata tm
             ON tm.trace_id = t.trace_id
-    `).get() as { total: number };
+        ${whereClause}
+    `).get(...parameters) as { total: number };
 
         const rows = this.db.prepare(`
         SELECT
@@ -383,9 +424,10 @@ export default class SQLiteStorage {
         FROM traces t
         LEFT JOIN trace_metadata tm
             ON tm.trace_id = t.trace_id
+        ${whereClause}
         ORDER BY t.started_at DESC
         LIMIT ? OFFSET ?
-    `).all(limit, offset);
+    `).all(...parameters, limit, offset);
 
         const summaries = rows.map((row: any) => {
             const userJson = row.user_json !== null

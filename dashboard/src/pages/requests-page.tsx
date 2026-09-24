@@ -3,10 +3,11 @@ import { useEffect, useState } from "react"
 import { clearHistory, deleteTrace } from "@/api/traces"
 import { getRequests, type IRequestsPagination } from "@/api/requests"
 import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { IDashboardRequest } from "@/types"
-import { Loader2, Trash2 } from "lucide-react"
+import { Loader2, Trash2, X } from "lucide-react"
 
 interface RequestsPageProps {
   onSelectRequest: (request: IDashboardRequest) => void
@@ -27,9 +28,44 @@ function userIdentity(user: IDashboardRequest["user"]): string | undefined {
   return user ? "Authenticated user" : undefined
 }
 
+function methodBadgeClass(method: string): string {
+  switch (method.toUpperCase()) {
+    case "GET":
+      return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+    case "POST":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "PUT":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+    case "PATCH":
+      return "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+    case "DELETE":
+      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+    default:
+      return "border-border bg-muted text-muted-foreground"
+  }
+}
+
+function statusBadgeClass(statusCode?: number): string {
+  switch (statusCode === undefined ? undefined : Math.floor(statusCode / 100)) {
+    case 2:
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case 3:
+      return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+    case 4:
+      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+    case 5:
+      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+    default:
+      return "border-border bg-muted text-muted-foreground"
+  }
+}
+
 export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [requests, setRequests] = useState<IDashboardRequest[]>([])
   const [page, setPage] = useState(1)
+  const [search, setSearch] = useState("")
+  const [method, setMethod] = useState("")
+  const [status, setStatus] = useState("")
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,7 +144,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     async function loadRequests() {
       try {
         setLoading(true)
-        const result = await getRequests(page)
+        const result = await getRequests(page, 20, search, method, status)
         if (active) {
           setRequests(result.data)
           setPagination(result.pagination)
@@ -136,7 +172,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       active = false
       clearInterval(interval)
     }
-  }, [page])
+  }, [page, search, method, status])
 
   return (
     <main className="p-6">
@@ -161,9 +197,70 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="w-full max-w-md">
-          <Input placeholder="Search requests..." />
+        <div className="flex w-full max-w-md items-center gap-2">
+          <Input
+            placeholder="Search requests..."
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setPage(1)
+            }}
+          />
+          {search && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Clear search"
+              onClick={() => {
+                setSearch("")
+                setPage(1)
+              }}
+            >
+              <X />
+            </Button>
+          )}
         </div>
+        <select
+          aria-label="Method"
+          className="h-9 rounded-md border bg-background px-3 text-sm"
+          value={method}
+          onChange={(event) => {
+            setMethod(event.target.value)
+            setPage(1)
+          }}
+        >
+          <option value="">All methods</option>
+          {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Status"
+          className="h-9 rounded-md border bg-background px-3 text-sm"
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value)
+            setPage(1)
+          }}
+        >
+          <option value="">All statuses</option>
+          {[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504].map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={!search && !method && !status}
+          onClick={() => {
+            setSearch("")
+            setMethod("")
+            setStatus("")
+            setPage(1)
+          }}
+        >
+          Reset filters
+        </Button>
         {pagination && (
           <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
             <span className="whitespace-nowrap">
@@ -221,10 +318,16 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                 }}
                 tabIndex={0}
               >
-                <td className="px-4 py-3 font-mono text-xs">{request.method}</td>
+                <td className="px-4 py-3">
+                  <Badge className={methodBadgeClass(request.method)}>
+                    {request.method}
+                  </Badge>
+                </td>
                 <td className="px-4 py-3 font-mono">{request.path}</td>
-                <td className="px-4 py-3 font-mono">
-                  {request.statusCode ?? "—"}
+                <td className="px-4 py-3">
+                  <Badge className={statusBadgeClass(request.statusCode)}>
+                    {request.statusCode ?? "—"}
+                  </Badge>
                 </td>
                 <td className="max-w-48 px-4 py-3" title={userIdentity(request.user)}>
                   <span className="block truncate">

@@ -55,8 +55,9 @@ async function run() {
       startedAt: 1000 + index,
       durationMs: index,
       attributes: {
-        'http.request.method': 'GET',
+        'http.request.method': index === 1 ? 'POST' : 'GET',
         'url.path': `/page/${index}`,
+        'http.response.status_code': index === 1 ? 201 : 200,
       },
       status: { code: 0 },
     });
@@ -154,6 +155,55 @@ async function run() {
     assert.equal(customPage.data.length, 5);
     assert.equal(customPage.pagination.limit, 5);
     assert.equal(customPage.pagination.totalPages, 5);
+
+    const searchedResponse = await apiFetch('/_devtools/api/requests?search=page%2F24');
+    assert.equal(searchedResponse.status, 200);
+    const searched = await searchedResponse.json();
+    assert.equal(searched.data.length, 1);
+    assert.equal(searched.data[0].id, 'trace-page-24');
+    assert.deepEqual(searched.pagination, {
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+      hasMore: false,
+    });
+
+    const searchedByNameResponse = await apiFetch('/_devtools/api/requests?search=users%2F%3Aid');
+    assert.equal(searchedByNameResponse.status, 200);
+    const searchedByName = await searchedByNameResponse.json();
+    assert.equal(searchedByName.data.length, 1);
+    assert.equal(searchedByName.data[0].id, 'trace-123');
+
+    const methodResponse = await apiFetch('/_devtools/api/requests?method=POST');
+    assert.equal(methodResponse.status, 200);
+    const methodBody = await methodResponse.json();
+    assert.deepEqual(methodBody.data.map((request: { id: string }) => request.id), ['trace-page-1']);
+    assert.equal(methodBody.pagination.total, 1);
+
+    const statusResponse = await apiFetch('/_devtools/api/requests?status=201');
+    assert.equal(statusResponse.status, 200);
+    const statusBody = await statusResponse.json();
+    assert.deepEqual(statusBody.data.map((request: { id: string }) => request.id), ['trace-page-1']);
+    assert.equal(statusBody.pagination.total, 1);
+
+    const combinedFilterResponse = await apiFetch('/_devtools/api/requests?search=page&method=POST&status=201');
+    assert.equal(combinedFilterResponse.status, 200);
+    const combinedFilterBody = await combinedFilterResponse.json();
+    assert.deepEqual(combinedFilterBody.data.map((request: { id: string }) => request.id), ['trace-page-1']);
+    assert.equal(combinedFilterBody.pagination.total, 1);
+
+    const clearedFiltersResponse = await apiFetch('/_devtools/api/requests?search=&method=&status=');
+    assert.equal(clearedFiltersResponse.status, 200);
+    const clearedFiltersBody = await clearedFiltersResponse.json();
+    assert.equal(clearedFiltersBody.data.length, 20);
+    assert.deepEqual(clearedFiltersBody.pagination, {
+      page: 1,
+      limit: 20,
+      total: 25,
+      totalPages: 2,
+      hasMore: true,
+    });
 
     for (const query of ['?page=0', '?page=1.5', '?limit=0', '?limit=101']) {
       const invalidResponse = await apiFetch(`/_devtools/api/requests${query}`);

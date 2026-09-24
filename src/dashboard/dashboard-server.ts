@@ -727,8 +727,22 @@ export default class DashboardServer {
             };
             const page = parsePositiveInteger("page", 1);
             const limit = parsePositiveInteger("limit", 20);
+            const search = searchParams.get("search") ?? "";
+            const method = searchParams.get("method")?.trim().toUpperCase() || undefined;
+            const statusValue = searchParams.get("status");
+            const statusCode = statusValue === null || statusValue === ""
+                ? undefined
+                : /^\d+$/.test(statusValue)
+                    ? Number(statusValue)
+                    : undefined;
 
-            if (page === undefined || limit === undefined || limit > 100) {
+            if (
+                page === undefined ||
+                limit === undefined ||
+                limit > 100 ||
+                (statusValue !== null && statusValue !== "" &&
+                    (statusCode === undefined || statusCode < 100 || statusCode > 599))
+            ) {
                 res.statusCode = 400;
                 res.setHeader("Content-Type", "application/json");
                 res.end(JSON.stringify({
@@ -749,7 +763,13 @@ export default class DashboardServer {
             let summaries: ReturnType<SQLiteStorage["getPaginatedTraceSummaries"]>;
 
             try {
-                summaries = this.storage.getPaginatedTraceSummaries(page, limit);
+                summaries = this.storage.getPaginatedTraceSummaries(
+                    page,
+                    limit,
+                    search,
+                    method,
+                    statusCode,
+                );
             } catch (error) {
                 debugLog("Trace summary lookup failed", {
                     errorName: error instanceof Error ? error.name : typeof error,
