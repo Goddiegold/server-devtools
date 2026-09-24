@@ -87,3 +87,5 @@ curl -i http://localhost:4000/_devtools
 npm run build
 npm pack
 npm install ../server-devtool/server-devtools-0.1.0.tgz
+
+npm version patch
