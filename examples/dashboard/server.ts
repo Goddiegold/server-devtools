@@ -32,6 +32,7 @@ async function bootstrap() {
 
   const express = require("express");
   const { MongoClient } = require("mongodb");
+  const { Pool } = require("pg");
   const http = require("node:http");
 
   const mongoClient = new MongoClient(
@@ -42,6 +43,9 @@ async function bootstrap() {
 
   const db = mongoClient.db("server_devtools");
   const users = db.collection("users");
+  const postgresPool = new Pool({
+    connectionString: "postgresql://mac@localhost:5432/server_devtools_test",
+  });
 
   const app = express() as Express;
 
@@ -73,6 +77,68 @@ async function bootstrap() {
       id: result.insertedId,
       ...user,
     });
+  });
+
+  app.get("/postgres-users", async (_req, res) => {
+    const result = await postgresPool.query("SELECT * FROM users");
+
+    res.json(result.rows);
+  });
+
+  app.get("/postgres-select", async (_req, res) => {
+    const result = await postgresPool.query("SELECT * FROM users");
+
+    res.json(result.rows);
+  });
+
+  app.get("/postgres-select-parameterized", async (req, res) => {
+    const result = await postgresPool.query(
+      "SELECT * FROM users WHERE id = $1",
+      [req.query.id],
+    );
+
+    res.json(result.rows);
+  });
+
+  app.post("/postgres-insert", async (req, res) => {
+    const { name, email } = req.body;
+    const result = await postgresPool.query(
+      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
+      [name, email],
+    );
+
+    res.status(201).json(result.rows[0]);
+  });
+
+  app.patch("/postgres-update/:id", async (req, res) => {
+    const result = await postgresPool.query(
+      "UPDATE users SET name = $1 WHERE id = $2 RETURNING *",
+      [req.body.name, req.params.id],
+    );
+
+    res.json(result.rows[0] ?? null);
+  });
+
+  app.delete("/postgres-delete/:id", async (req, res) => {
+    const result = await postgresPool.query(
+      "DELETE FROM users WHERE id = $1 RETURNING *",
+      [req.params.id],
+    );
+
+    res.json(result.rows[0] ?? null);
+  });
+
+  app.get("/postgres-failed", async (_req, res) => {
+    try {
+      await postgresPool.query("SELECT * FROM intentionally_missing_users");
+      res.status(500).json({
+        error: "Expected PostgreSQL query to fail",
+      });
+    } catch (_error) {
+      res.status(500).json({
+        error: "Intentional PostgreSQL query failure",
+      });
+    }
   });
 
   app.get("/stream-test", (_req, res) => {

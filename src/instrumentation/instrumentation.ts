@@ -9,6 +9,7 @@ import SQLiteStorage from "../storage/sqlite-storage";
 import { OutboundHttpCapture } from "./outbound-http/outbound-http-capture";
 import { ClientRequest, IncomingMessage } from "node:http";
 import { debugLog } from "../utils/logger";
+import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 
 
 export class Instrumentation {
@@ -137,6 +138,7 @@ export class Instrumentation {
                 new MongoDBInstrumentation({
                     enhancedDatabaseReporting: false,
                 }),
+             new PgInstrumentation(),
             ],
         });
 
