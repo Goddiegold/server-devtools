@@ -10,6 +10,7 @@ import { OutboundHttpCapture } from "./outbound-http/outbound-http-capture";
 import { ClientRequest, IncomingMessage } from "node:http";
 import { debugLog } from "../utils/logger";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
+import { MySQL2Instrumentation } from "@opentelemetry/instrumentation-mysql2";
 
 
 export class Instrumentation {
@@ -138,7 +139,8 @@ export class Instrumentation {
                 new MongoDBInstrumentation({
                     enhancedDatabaseReporting: false,
                 }),
-             new PgInstrumentation(),
+                new PgInstrumentation(),
+                new MySQL2Instrumentation(),
             ],
         });
 

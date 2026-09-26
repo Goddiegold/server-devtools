@@ -84,6 +84,64 @@ curl -i http://localhost:4000/error
 
 curl -i http://localhost:4000/_devtools
 
+# Legacy mysql
+
+curl http://localhost:3000/mysql-users
+
+curl http://localhost:3000/mysql-users/1
+
+curl -X POST http://localhost:3000/mysql-users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User","email":"test@example.com"}'
+
+curl -X PUT http://localhost:3000/mysql-users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Updated User","email":"updated@example.com"}'
+
+curl -X DELETE http://localhost:3000/mysql-users/1
+
+curl -i http://localhost:3000/mysql-failed
+
+# mysql2
+
+curl http://localhost:3000/mysql2-users
+
+curl http://localhost:3000/mysql2-users/1
+
+curl -X POST http://localhost:3000/mysql2-users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User","email":"test@example.com"}'
+
+curl -X PUT http://localhost:3000/mysql2-users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Updated User","email":"updated@example.com"}'
+
+curl -X DELETE http://localhost:3000/mysql2-users/1
+
+curl -i http://localhost:3000/mysql2-failed
+
+docker run --name server-devtools-mysql \
+  -e MYSQL_ROOT_PASSWORD=root \
+  -e MYSQL_DATABASE=server_devtools_test \
+  -p 3306:3306 \
+  -d mysql:8.4 \
+  --mysql-native-password=ON
+
+docker logs -f server-devtools-mysql
+
+docker exec -it server-devtools-mysql \
+  mysql -uroot -proot
+
+CREATE USER 'devtools'@'%'
+IDENTIFIED WITH mysql_native_password BY 'devtools';
+
+GRANT ALL PRIVILEGES
+ON server_devtools_test.*
+TO 'devtools'@'%';
+
+FLUSH PRIVILEGES;
+
+
 npm run build
 npm pack
 npm install ../server-devtool/server-devtools-0.1.0.tgz

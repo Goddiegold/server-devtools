@@ -33,6 +33,7 @@ async function bootstrap() {
   const express = require("express");
   const { MongoClient } = require("mongodb");
   const { Pool } = require("pg");
+  const mysql2 = require("mysql2");
   const http = require("node:http");
 
   const mongoClient = new MongoClient(
@@ -46,6 +47,11 @@ async function bootstrap() {
   const postgresPool = new Pool({
     connectionString: "postgresql://mac@localhost:5432/server_devtools_test",
   });
+  const mysql2Pool = mysql2
+    .createPool(
+      "mysql://devtools:devtools@localhost:3306/server_devtools_test",
+    )
+    .promise();
 
   const app = express() as Express;
 
@@ -141,6 +147,92 @@ async function bootstrap() {
     }
   });
 
+  app.get("/mysql2-users", async (_req, res) => {
+    try {
+      const [rows] = await mysql2Pool.execute("SELECT * FROM users");
+
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/mysql2-users/:id", async (req, res) => {
+    try {
+      const [rows] = await mysql2Pool.execute(
+        "SELECT * FROM users WHERE id = ?",
+        [req.params.id],
+      );
+
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/mysql2-users", async (req, res) => {
+    try {
+      const [result] = await mysql2Pool.execute(
+        "INSERT INTO users (name, email) VALUES (?, ?)",
+        [req.body.name, req.body.email],
+      );
+
+      res.status(201).json(result);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.put("/mysql2-users/:id", async (req, res) => {
+    try {
+      const [result] = await mysql2Pool.execute(
+        "UPDATE users SET name = ?, email = ? WHERE id = ?",
+        [req.body.name, req.body.email, req.params.id],
+      );
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.delete("/mysql2-users/:id", async (req, res) => {
+    try {
+      const [result] = await mysql2Pool.execute(
+        "DELETE FROM users WHERE id = ?",
+        [req.params.id],
+      );
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/mysql2-failed", async (_req, res) => {
+    try {
+      const [rows] = await mysql2Pool.execute(
+        "SELECT * FROM intentionally_missing_users",
+      );
+
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   app.get("/stream-test", (_req, res) => {
     res.write("Hello ");
     res.write("from ");
@@ -193,44 +285,44 @@ async function bootstrap() {
   });
 
   app.get("/fetch-concurrent-test", async (_req, res) => {
-  const responses = await Promise.all([
-    fetch("http://localhost:3000/external-test", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        request: "A",
+    const responses = await Promise.all([
+      fetch("http://localhost:3000/external-test", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          request: "A",
+        }),
       }),
-    }),
 
-    fetch("http://localhost:3000/external-test", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        request: "B",
+      fetch("http://localhost:3000/external-test", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          request: "B",
+        }),
       }),
-    }),
 
-    fetch("http://localhost:3000/external-test", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        request: "C",
+      fetch("http://localhost:3000/external-test", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          request: "C",
+        }),
       }),
-    }),
-  ]);
+    ]);
 
-  const data = await Promise.all(
-    responses.map((response) => response.json()),
-  );
+    const data = await Promise.all(
+      responses.map((response) => response.json()),
+    );
 
-  res.json(data);
-});
+    res.json(data);
+  });
 
   function testNativeHttpRequest() {
     return new Promise<void>((resolve, reject) => {
