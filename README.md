@@ -3,7 +3,7 @@
 **Chrome DevTools for your backend.**
 
 ServerDevTools is an embeddable backend inspector for Node.js
-applications.
+applications: **Chrome DevTools for your Node.js backend.**
 
 It gives you a live dashboard for inspecting:
 
@@ -16,6 +16,9 @@ It gives you a live dashboard for inspecting:
 -   database operations
 -   errors
 -   timing
+-   current/authenticated user context
+-   server-side request search
+-   request filtering by HTTP method and status
 
 Instead of jumping between logs, traces, and multiple observability
 tools, ServerDevTools lets you inspect what your backend is doing from
@@ -82,6 +85,9 @@ full production observability platforms.
 ``` bash
 npm install server-devtools
 ```
+
+ServerDevTools includes the supported OpenTelemetry instrumentation libraries;
+you do not need to install the database instrumentation packages separately.
 
 ------------------------------------------------------------------------
 
@@ -440,16 +446,27 @@ http://localhost:3000
 
 ## Current Support
 
-Initial support focuses on Node.js applications:
+ServerDevTools currently supports:
 
--   Node.js HTTP
+-   Node.js
 -   Express
 -   NestJS middleware and error interception
--   MongoDB operations
+-   MongoDB
+-   PostgreSQL through `pg`
+-   MySQL through `mysql2`
 -   native HTTP/HTTPS and fetch/Undici requests, including headers and bodies
+-   request search and filtering by HTTP method and status
+-   current/authenticated user context when supplied by the application
 -   OpenTelemetry-powered activity capture
 
-Support will expand as the project develops.
+### Database tracing
+
+Supported database operations automatically appear inside the request
+execution trace when using these supported drivers:
+
+-   MongoDB
+-   PostgreSQL (`pg`)
+-   MySQL (`mysql2`)
 
 ------------------------------------------------------------------------
 
@@ -486,40 +503,13 @@ Expect APIs and configuration to evolve before `1.0`.
 
 ------------------------------------------------------------------------
 
-## Roadmap
+## Coming next
 
-Near-term:
+Planned, not yet available:
 
--   [x] HTTP request capture
--   [x] Request headers
--   [x] Query parameters
--   [x] Route parameters
--   [x] Request body
--   [x] HTTP response status
--   [x] Response headers
--   [x] Response body
--   [x] Execution tree
--   [x] Native HTTP/HTTPS and fetch/Undici inspection
--   [x] MongoDB inspection
--   [x] Error inspection
--   [x] NestJS integration and error interception
--   [x] Encryption at rest for selected fields
--   [ ] Request/response redaction
--   [ ] Body-size limits
--   [ ] Production-safe configuration
--   [ ] Broader NestJS compatibility
--   [x] Static dashboard packaging
-
-Future ideas:
-
--   Redis
--   PostgreSQL
--   MySQL
--   additional Node frameworks
--   trace filtering
--   request search
--   configurable retention
--   multi-instance support
+-   Redis visibility
+-   Configurable trace storage, including storing ServerDevTools data through
+    user-configured storage instead of only the default local SQLite storage
 
 ------------------------------------------------------------------------
 
