@@ -78,7 +78,7 @@ function ExecutionTreeNode({
   isLast?: boolean
   rootRequestDurationMs: number
 }) {
-  const hasError = Boolean(node.span.error) || node.span.status.code !== 0
+  const hasError = Boolean(node.span.error) || node.span.status.code === 2
   const typeLabel = spanTypeLabel(node.span)
   const isSelectable = node.span.type === "database" || node.span.type === "http.client"
   const isSelected = node.span.spanId === selectedSpanId

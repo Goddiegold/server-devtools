@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { Express } from "express";
 import type { IncomingMessage } from "node:http";
 
@@ -34,6 +36,7 @@ async function bootstrap() {
   const { MongoClient } = require("mongodb");
   const { Pool } = require("pg");
   const mysql2 = require("mysql2");
+  const Redis = require("ioredis");
   const http = require("node:http");
 
   const mongoClient = new MongoClient(
@@ -52,6 +55,13 @@ async function bootstrap() {
       "mysql://devtools:devtools@localhost:3306/server_devtools_test",
     )
     .promise();
+  const redis = new Redis({
+    host: process.env.REDIS_HOST ?? "localhost",
+    port: Number(process.env.REDIS_PORT ?? 6379),
+    username: process.env.REDIS_USER,
+    password: process.env.REDIS_PASSWORD,
+    db: Number(process.env.REDIS_DB_INDEX ?? 0),
+  });
 
   const app = express() as Express;
 
@@ -226,6 +236,34 @@ async function bootstrap() {
       );
 
       res.json(rows);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/redis-test/:key", async (req, res) => {
+    try {
+      const value = `server-devtools-test:${req.params.key}`;
+
+      await redis.set(req.params.key, value, "EX", 30);
+      const retrievedValue = await redis.get(req.params.key);
+
+      res.json({
+        key: req.params.key,
+        value: retrievedValue,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/redis-failed", async (_req, res) => {
+    try {
+      await redis.call("SERVERDEVTOOLS_INVALID_COMMAND");
     } catch (error) {
       res.status(500).json({
         error: error instanceof Error ? error.message : String(error),

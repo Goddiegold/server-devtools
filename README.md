@@ -548,6 +548,19 @@ The goal is simple:
 
 The project is still early.
 
+### Redis integration tests
+
+The ioredis integration tests require a disposable Redis instance. Run
+them with its connection URL:
+
+```sh
+REDIS_TEST_URL=redis://127.0.0.1:6379 npx tsx --test tests/ioredis-integration.test.ts
+```
+
+When `REDIS_TEST_URL` is not set, the Redis integration tests are
+reported as skipped. The tests use isolated keys and clean up their
+clients and data.
+
 Issues, ideas, bug reports, and contributions are welcome.
 
 ------------------------------------------------------------------------

@@ -11,6 +11,7 @@ import { ClientRequest, IncomingMessage } from "node:http";
 import { debugLog } from "../utils/logger";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 import { MySQL2Instrumentation } from "@opentelemetry/instrumentation-mysql2";
+import { IORedisInstrumentation } from "@opentelemetry/instrumentation-ioredis";
 
 
 export class Instrumentation {
@@ -141,6 +142,7 @@ export class Instrumentation {
                 }),
                 new PgInstrumentation(),
                 new MySQL2Instrumentation(),
+                new IORedisInstrumentation(),
             ],
         });
 
