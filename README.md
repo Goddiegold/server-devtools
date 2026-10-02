@@ -165,6 +165,18 @@ server.listen(3000);
 tsx watch --import ./server-devtools.ts src/main.ts
 ```
 
+`await devtools.start()` automatically registers OpenTelemetry's ESM loader hook
+once per process before starting the OpenTelemetry SDK. Keep startup in the
+preload module and let it complete before application dependencies load, including
+normal `ioredis` imports. Already-loaded dependencies cannot be instrumented
+retroactively.
+
+The installed OpenTelemetry hook exports asynchronous loader hooks, which require
+`node:module.register()`. Newer Node.js versions deprecate this API; its
+`registerHooks()` replacement takes synchronous hooks and cannot directly load
+OpenTelemetry's `hook.mjs`. This compatibility requirement does not change the
+startup command or configuration.
+
 The application can import the same instance normally and mount it in Express:
 
 ```ts

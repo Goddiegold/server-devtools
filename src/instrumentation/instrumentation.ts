@@ -12,7 +12,11 @@ import { debugLog } from "../utils/logger";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 import { MySQL2Instrumentation } from "@opentelemetry/instrumentation-mysql2";
 import { IORedisInstrumentation } from "@opentelemetry/instrumentation-ioredis";
+import { register } from "node:module";
+import { pathToFileURL } from "node:url";
 
+const esmHookRegistered = Symbol.for("server-devtools.opentelemetry.esm-hook-registered");
+const processState = process as typeof process & { [esmHookRegistered]?: boolean };
 
 export class Instrumentation {
     private readonly oTelSdk: NodeSDK;
@@ -150,6 +154,14 @@ export class Instrumentation {
     }
 
     async start() {
+        if (!processState[esmHookRegistered]) {
+            // OpenTelemetry's hook exports async loader hooks. Despite its
+            // deprecation, register() is required; registerHooks() takes sync hooks.
+            register(pathToFileURL(require.resolve("@opentelemetry/instrumentation/hook.mjs")));
+            // Keep registration across instances/restarts, but allow retry on failure.
+            processState[esmHookRegistered] = true;
+        }
+
         debugLog("Starting OpenTelemetry SDK");
         await this.oTelSdk.start();
         this.outboundHttpCapture.startFetchCapture();
