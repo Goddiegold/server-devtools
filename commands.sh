@@ -141,6 +141,17 @@ TO 'devtools'@'%';
 
 FLUSH PRIVILEGES;
 
+curl http://localhost:4000/redis/string
+curl http://localhost:4000/redis/missing
+curl http://localhost:4000/redis/hash
+curl http://localhost:4000/redis/list
+curl http://localhost:4000/redis/set
+curl http://localhost:4000/redis/sorted-set
+curl http://localhost:4000/redis/pipeline
+curl http://localhost:4000/redis/transaction
+curl http://localhost:4000/redis/expired
+curl http://localhost:4000/redis/failed
+curl http://localhost:4000/redis/wrong-type
 
 npm run build
 npm pack
