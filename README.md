@@ -168,7 +168,7 @@ tsx watch --import ./server-devtools.ts src/main.ts
 `await devtools.start()` automatically registers OpenTelemetry's ESM loader hook
 once per process before starting the OpenTelemetry SDK. Keep startup in the
 preload module and let it complete before application dependencies load, including
-normal `ioredis` imports. Already-loaded dependencies cannot be instrumented
+normal Redis (ioredis) imports. Already-loaded dependencies cannot be instrumented
 retroactively.
 
 The installed OpenTelemetry hook exports asynchronous loader hooks, which require
@@ -466,6 +466,7 @@ ServerDevTools currently supports:
 -   MongoDB
 -   PostgreSQL through `pg`
 -   MySQL through `mysql2`
+-   Redis (ioredis)
 -   native HTTP/HTTPS and fetch/Undici requests, including headers and bodies
 -   request search and filtering by HTTP method and status
 -   current/authenticated user context when supplied by the application
@@ -479,6 +480,11 @@ execution trace when using these supported drivers:
 -   MongoDB
 -   PostgreSQL (`pg`)
 -   MySQL (`mysql2`)
+-   Redis (ioredis)
+
+Redis command spans include command inspection, arguments, timings, request
+links, and command errors. Redis (ioredis) support has been verified in
+Express and NestJS applications, including pipelines and transactions.
 
 ------------------------------------------------------------------------
 
@@ -519,7 +525,6 @@ Expect APIs and configuration to evolve before `1.0`.
 
 Planned, not yet available:
 
--   Redis visibility
 -   Configurable trace storage, including storing ServerDevTools data through
     user-configured storage instead of only the default local SQLite storage
 
@@ -560,7 +565,7 @@ The goal is simple:
 
 The project is still early.
 
-### Redis integration tests
+### Redis (ioredis) integration tests
 
 The ioredis integration tests require a disposable Redis instance. Run
 them with its connection URL:
