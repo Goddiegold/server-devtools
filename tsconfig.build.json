@@ -8,7 +8,7 @@
     "outDir": "./dist",
     "noEmit": false
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.mts"],
   "exclude": [
     "tests",
     "examples",
