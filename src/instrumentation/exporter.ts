@@ -16,32 +16,34 @@ export default class ServerDevToolsExporter implements SpanExporter {
         spans: ReadableSpan[],
         resultCallback: (result: ExportResult) => void,
     ): void {
-        try {
-            for (const span of spans) {
-                const devToolsSpan = this.spanMapper.map(span);
+        void (async () => {
+            try {
+                for (const span of spans) {
+                    const devToolsSpan = this.spanMapper.map(span);
 
-                this.storage.saveSpan(devToolsSpan);
+                    await this.storage.saveSpan(devToolsSpan);
 
-                if (!devToolsSpan.parentSpanId) {
-                    this.storage.saveTraceSummary(devToolsSpan);
+                    if (!devToolsSpan.parentSpanId) {
+                        await this.storage.saveTraceSummary(devToolsSpan);
+                    }
                 }
-            }
 
-            resultCallback({
-                code: ExportResultCode.SUCCESS,
-            });
-        } catch (error) {
-            debugLog("Span export failed", {
-                spanCount: spans.length,
-                errorName: error instanceof Error ? error.name : typeof error,
-            });
-            resultCallback({
-                code: ExportResultCode.FAILED,
-                error: error instanceof Error
-                    ? error
-                    : new Error(String(error)),
-            });
-        }
+                resultCallback({
+                    code: ExportResultCode.SUCCESS,
+                });
+            } catch (error) {
+                debugLog("Span export failed", {
+                    spanCount: spans.length,
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                resultCallback({
+                    code: ExportResultCode.FAILED,
+                    error: error instanceof Error
+                        ? error
+                        : new Error(String(error)),
+                });
+            }
+        })();
     }
 
     async shutdown(): Promise<void> {

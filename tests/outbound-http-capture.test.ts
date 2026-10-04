@@ -7,7 +7,7 @@ import { OutboundHttpCapture } from "../src/instrumentation/outbound-http/outbou
 
 function createStorage(t: TestContext): SQLiteStorage {
   const storage = new SQLiteStorage(":memory:");
-  t.after(() => storage.close());
+  t.after(async () => { await storage.close(); });
   return storage;
 }
 
@@ -30,14 +30,14 @@ function closeServer(t: TestContext, server: Server): void {
   });
 }
 
-test("SQLiteStorage creates, incrementally updates, and reconstructs HTTP client details", (t) => {
+test("SQLiteStorage creates, incrementally updates, and reconstructs HTTP client details", async (t) => {
   const storage = createStorage(t);
 
-  storage.updateHttpClientDetails("span-1", {
+  await storage.updateHttpClientDetails("span-1", {
     requestHeaders: { "content-type": "application/json", "x-request": "one" },
     requestBody: { name: "Ada" },
   });
-  assert.deepEqual(storage.getHttpClientDetails("span-1"), {
+  assert.deepEqual(await storage.getHttpClientDetails("span-1"), {
     spanId: "span-1",
     requestHeaders: { "content-type": "application/json", "x-request": "one" },
     requestBody: { name: "Ada" },
@@ -45,14 +45,14 @@ test("SQLiteStorage creates, incrementally updates, and reconstructs HTTP client
     responseBody: undefined,
   });
 
-  storage.updateHttpClientDetails("span-1", {
+  await storage.updateHttpClientDetails("span-1", {
     responseHeaders: { "content-type": "application/json", "x-response": "two" },
   });
-  storage.updateHttpClientDetails("span-1", {
+  await storage.updateHttpClientDetails("span-1", {
     responseBody: { id: 42, active: true },
   });
 
-  assert.deepEqual(storage.getHttpClientDetails("span-1"), {
+  assert.deepEqual(await storage.getHttpClientDetails("span-1"), {
     spanId: "span-1",
     requestHeaders: { "content-type": "application/json", "x-request": "one" },
     requestBody: { name: "Ada" },
@@ -108,7 +108,7 @@ test("native HTTP capture records headers and complete chunked bodies without co
 
   assert.equal(applicationResponse.body, '{"received":"by-app"}');
   assert.equal(applicationResponse.headers["x-response"], "captured");
-  const details = storage.getHttpClientDetails("native-span");
+  const details = await storage.getHttpClientDetails("native-span");
   assert.deepEqual(details?.requestHeaders, {
     "content-type": "application/json",
     "x-request": "captured",
@@ -183,7 +183,7 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   assert.equal(emptyResponse.status, 204);
 
   for (const [spanId, id] of [["fetch-span-a", "a"], ["fetch-span-b", "b"]]) {
-    const details = storage.getHttpClientDetails(spanId);
+    const details = await storage.getHttpClientDetails(spanId);
     assert.deepEqual(details?.requestHeaders, { "content-type": "application/json", "x-request": id });
     assert.deepEqual(details?.requestBody, { id });
     assert.equal(details?.responseHeaders?.["content-type"], "application/json");
@@ -191,14 +191,14 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
     assert.deepEqual(details?.responseBody, { responseId: id });
   }
 
-  const textDetails = storage.getHttpClientDetails("fetch-span-text");
+  const textDetails = await storage.getHttpClientDetails("fetch-span-text");
   assert.deepEqual(textDetails?.requestHeaders, { "x-request": "text" });
   assert.equal(textDetails?.requestBody, undefined);
   assert.equal(textDetails?.responseHeaders?.["content-type"], "text/plain");
   assert.equal(textDetails?.responseHeaders?.["x-response"], "text");
   assert.equal(textDetails?.responseBody, "plain response");
 
-  const emptyDetails = storage.getHttpClientDetails("fetch-span-empty");
+  const emptyDetails = await storage.getHttpClientDetails("fetch-span-empty");
   assert.deepEqual(emptyDetails?.requestHeaders, {});
   assert.equal(emptyDetails?.requestBody, undefined);
   assert.equal(emptyDetails?.responseHeaders?.["x-response"], "empty");

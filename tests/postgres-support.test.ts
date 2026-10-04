@@ -125,6 +125,7 @@ assert.deepEqual(failedResult.error, {
   stack: "error: relation missing_users does not exist",
 });
 
+async function run(): Promise<void> {
 const storage = new SQLiteStorage(":memory:");
 const exporter = new ServerDevToolsExporter(storage);
 
@@ -144,11 +145,13 @@ const requestSpan = makeSpan({
 });
 
 let exportCode: number | undefined;
-exporter.export([requestSpan, failedPostgresSpan], (result) => {
+await new Promise<void>((resolve, reject) => exporter.export([requestSpan, failedPostgresSpan], (result) => {
   exportCode = result.code;
-});
+  if (result.error) reject(result.error);
+  else resolve();
+}));
 
-const trace = storage.getTrace("postgres-failure-trace");
+const trace = await storage.getTrace("postgres-failure-trace");
 
 assert.equal(exportCode, 0);
 assert.ok(trace);
@@ -157,8 +160,11 @@ assert.equal(trace.spans.length, 2);
 assert.equal(trace.spans[1].spanId, "postgres-failure-span");
 assert.equal(trace.spans[1].parentSpanId, "request-failure-span");
 assert.equal(trace.spans[1].traceId, trace.traceId);
-assert.equal(storage.getTraceSummaries()[0]?.hasError, true);
+assert.equal((await storage.getTraceSummaries())[0]?.hasError, true);
 
-storage.close();
+await storage.close();
 
 console.log("PostgreSQL support tests passed");
+}
+
+void run();

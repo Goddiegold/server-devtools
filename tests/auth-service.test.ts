@@ -52,15 +52,15 @@ test("rejects invalid username", () => {
     assert.equal(result, false);
 });
 
-test("creates and retrieves a session", () => {
+test("creates and retrieves a session", async () => {
     const { authService } = createAuthService();
 
-    const token = authService.createSession("admin");
+    const token = await authService.createSession("admin");
 
     assert.equal(typeof token, "string");
     assert.ok(token.length > 0);
 
-    const session = authService.getSession(token);
+    const session = await authService.getSession(token);
 
     assert.ok(session);
     assert.equal(session.username, "admin");
@@ -68,39 +68,39 @@ test("creates and retrieves a session", () => {
     assert.ok(session.expiresAt > Date.now());
 });
 
-test("generates different tokens for different sessions", () => {
+test("generates different tokens for different sessions", async () => {
     const { authService } = createAuthService();
 
-    const firstToken = authService.createSession("admin");
-    const secondToken = authService.createSession("admin");
+    const firstToken = await authService.createSession("admin");
+    const secondToken = await authService.createSession("admin");
 
     assert.notEqual(firstToken, secondToken);
 
-    assert.ok(authService.getSession(firstToken));
-    assert.ok(authService.getSession(secondToken));
+    assert.ok(await authService.getSession(firstToken));
+    assert.ok(await authService.getSession(secondToken));
 });
 
-test("returns undefined for unknown session token", () => {
+test("returns undefined for unknown session token", async () => {
     const { authService } = createAuthService();
 
-    const session = authService.getSession(
+    const session = await authService.getSession(
         "invalid-session-token",
     );
 
     assert.equal(session, undefined);
 });
 
-test("deletes a session", () => {
+test("deletes a session", async () => {
     const { authService } = createAuthService();
 
-    const token = authService.createSession("admin");
+    const token = await authService.createSession("admin");
 
-    assert.ok(authService.getSession(token));
+    assert.ok(await authService.getSession(token));
 
-    authService.deleteSession(token);
+    await authService.deleteSession(token);
 
     assert.equal(
-        authService.getSession(token),
+        await authService.getSession(token),
         undefined,
     );
 });

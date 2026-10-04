@@ -42,7 +42,7 @@ test("startup shares ESM hook registration before OpenTelemetry starts", async (
   assert.deepEqual(events, ["register", "start", "start", "start"]);
 });
 
-test("constructing ServerDevTools does not wrap global fetch", (t) => {
+test("constructing ServerDevTools does not wrap global fetch", async (t) => {
   const originalFetch = globalThis.fetch;
   const previousDirectory = process.cwd();
   const directory = mkdtempSync(join(tmpdir(), "server-devtools-construction-"));
@@ -51,7 +51,7 @@ test("constructing ServerDevTools does not wrap global fetch", (t) => {
   try {
     const devtools = new ServerDevTools({ auth: { username: "user", password: "pass" } });
     assert.equal(globalThis.fetch, originalFetch);
-    (devtools as unknown as { storage: SQLiteStorage }).storage.close();
+    await (devtools as unknown as { storage: SQLiteStorage }).storage.close();
   } finally {
     process.chdir(previousDirectory);
     rmSync(directory, { recursive: true, force: true });
@@ -91,9 +91,9 @@ test("Instrumentation.shutdown closes storage when OpenTelemetry shutdown fails"
   const shutdownError = new Error("OpenTelemetry shutdown failed");
   let storageClosed = false;
   const closeStorage = storage.close.bind(storage);
-  storage.close = () => {
+  storage.close = async () => {
     storageClosed = true;
-    closeStorage();
+    await closeStorage();
   };
   const sdk = (instrumentation as unknown as {
     oTelSdk: { shutdown: () => Promise<void> };
@@ -105,7 +105,7 @@ test("Instrumentation.shutdown closes storage when OpenTelemetry shutdown fails"
   await assert.doesNotReject(instrumentation.shutdown());
 });
 
-test("response capture does not prevent the host response when persistence fails", (t) => {
+test("response capture does not prevent the host response when persistence fails", async (t) => {
   const previousDirectory = process.cwd();
   const directory = mkdtempSync(join(tmpdir(), "server-devtools-response-failure-"));
   process.chdir(directory);
@@ -149,7 +149,7 @@ test("response capture does not prevent the host response when persistence fails
 
     assert.equal(originalEndCalls, 1);
   } finally {
-    storage.close();
+    await storage.close();
     process.chdir(previousDirectory);
     rmSync(directory, { recursive: true, force: true });
   }

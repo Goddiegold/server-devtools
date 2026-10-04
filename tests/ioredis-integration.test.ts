@@ -53,9 +53,9 @@ async function runRequest<T>(
   return { traceId, result };
 }
 
-function redisSpans(traceId: string): IDevToolsSpan[] {
-  return storage!
-    .getSpansByTraceId(traceId)
+async function redisSpans(traceId: string): Promise<IDevToolsSpan[]> {
+  return (await storage!
+    .getSpansByTraceId(traceId))
     .filter((span) => span.attributes["db.system.name"] === "redis");
 }
 
@@ -111,8 +111,8 @@ test(
 
     assert.deepEqual(result, { setResult: "OK", getResult: "value" });
 
-    const spans = redisSpans(traceId);
-    const requestSpanId = storage!.getSpansByTraceId(traceId).find((span) => span.parentSpanId === undefined)?.spanId;
+    const spans = await redisSpans(traceId);
+    const requestSpanId = (await storage!.getSpansByTraceId(traceId)).find((span) => span.parentSpanId === undefined)?.spanId;
     assert.equal(spans.length, 2);
     for (const span of spans) {
       assert.equal(span.parentSpanId, requestSpanId);
@@ -132,7 +132,7 @@ test(
     const { traceId, result } = await runRequest("redis missing key request", () => redis.get(missingKey));
 
     assert.equal(result, null);
-    const [span] = redisSpans(traceId);
+    const [span] = await redisSpans(traceId);
     assert.ok(span);
     assertSuccessfulCommand(span, "GET");
   },
@@ -156,7 +156,7 @@ test(
       );
     });
 
-    const spans = redisSpans(traceId);
+    const spans = await redisSpans(traceId);
     assert.equal(spans.length, 2);
     for (const span of spans) {
       assert.equal(span.type, "database");
@@ -182,7 +182,7 @@ test(
       await redis.multi().set(transactionKey, "transaction-value").get(transactionKey).exec();
     });
 
-    const spans = redisSpans(traceId);
+    const spans = await redisSpans(traceId);
     const pipelineSpans = spans.filter((span) => operationName(span).startsWith("PIPELINE "));
     const transactionSpans = spans.filter((span) => operationName(span).startsWith("MULTI "));
 
@@ -196,7 +196,8 @@ test(
       transactionSpans.map(operationName).sort(),
       ["MULTI GET", "MULTI SET"],
     );
-    assert.ok(spans.every((span) => span.parentSpanId === storage!.getSpansByTraceId(traceId).find((root) => !root.parentSpanId)?.spanId));
+    const rootSpanId = (await storage!.getSpansByTraceId(traceId)).find((root) => !root.parentSpanId)?.spanId;
+    assert.ok(spans.every((span) => span.parentSpanId === rootSpanId));
   },
 );
 
@@ -218,7 +219,7 @@ test(
     ]);
 
     assert.deepEqual(requests.map((request) => request.result).sort(), ["A", "B"]);
-    const traces = requests.map((request) => storage!.getSpansByTraceId(request.traceId));
+    const traces = await Promise.all(requests.map((request) => storage!.getSpansByTraceId(request.traceId)));
     assert.notEqual(requests[0]!.traceId, requests[1]!.traceId);
     assert.equal(traces[0]!.filter((span) => span.type === "database").length, 2);
     assert.equal(traces[1]!.filter((span) => span.type === "database").length, 2);

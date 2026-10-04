@@ -131,7 +131,12 @@ export class Instrumentation {
 
 
                         try {
-                            this.storage.saveRequestBody(traceId, info.request.body)
+                            void this.storage.saveRequestBody(traceId, info.request.body).catch((error) => {
+                            debugLog("Request body capture failed", {
+                                traceId,
+                                errorName: error instanceof Error ? error.name : typeof error,
+                            });
+                            });
                         } catch (error) {
                             debugLog("Request body capture failed", {
                                 traceId,
@@ -163,6 +168,7 @@ export class Instrumentation {
         }
 
         debugLog("Starting OpenTelemetry SDK");
+        await this.storage.initialize();
         await this.oTelSdk.start();
         this.outboundHttpCapture.startFetchCapture();
         debugLog("OpenTelemetry SDK started");
@@ -179,7 +185,7 @@ export class Instrumentation {
         try {
             await this.oTelSdk.shutdown();
         } finally {
-            this.storage.close();
+            await this.storage.close();
         }
         debugLog("OpenTelemetry SDK shut down");
     }

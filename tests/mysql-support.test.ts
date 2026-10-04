@@ -155,18 +155,21 @@ const requestSpan = {
   },
 } as unknown as ReadableSpan;
 
+async function run(): Promise<void> {
 const storage = new SQLiteStorage(":memory:");
 const exporter = new ServerDevToolsExporter(storage);
 let exportCode: number | undefined;
 
-exporter.export(
+await new Promise<void>((resolve, reject) => exporter.export(
   [requestSpan, ...mysql2Operations, failedMysql2Span],
   (result) => {
     exportCode = result.code;
+    if (result.error) reject(result.error);
+    else resolve();
   },
-);
+));
 
-const trace = storage.getTrace(traceId);
+const trace = await storage.getTrace(traceId);
 
 assert.equal(exportCode, 0);
 assert.ok(trace);
@@ -177,8 +180,11 @@ assert.ok(
     .filter((span) => span.type === "database")
     .every((span) => span.parentSpanId === requestSpanId),
 );
-assert.equal(storage.getTraceSummaries()[0]?.hasError, true);
+assert.equal((await storage.getTraceSummaries())[0]?.hasError, true);
 
-storage.close();
+await storage.close();
 
 console.log("MySQL support tests passed");
+}
+
+void run();

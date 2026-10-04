@@ -82,10 +82,10 @@ export default class DashboardServer {
         return undefined;
     }
 
-    private authenticateRequest(
+    private async authenticateRequest(
         req: IncomingMessage,
         res: ServerResponse,
-    ): ISession | undefined {
+    ): Promise<ISession | undefined> {
         const token = this.getCookie(req, "sdt_session");
 
         if (!token) {
@@ -93,7 +93,7 @@ export default class DashboardServer {
             return undefined;
         }
 
-        const session = this.authService.getSession(token);
+        const session = await this.authService.getSession(token);
 
         if (!session) {
             this.sendUnauthorized(res);
@@ -148,7 +148,7 @@ export default class DashboardServer {
         let token: string;
 
         try {
-            token = this.authService.createSession(username)
+            token = await this.authService.createSession(username)
         } catch (error) {
             debugLog("Session creation failed", {
                 errorName: error instanceof Error ? error.name : typeof error,
@@ -172,14 +172,14 @@ export default class DashboardServer {
         return;
     }
 
-    private handleLogout(
+    private async handleLogout(
         req: IncomingMessage,
         res: ServerResponse,
-    ): void {
+    ): Promise<void> {
         const token = this.getCookie(req, "sdt_session");
 
         if (token) {
-            this.authService.deleteSession(token);
+            await this.authService.deleteSession(token);
         }
 
         res.setHeader(
@@ -195,10 +195,10 @@ export default class DashboardServer {
         }));
     }
 
-    private handleProfile(
+    private async handleProfile(
         req: IncomingMessage,
         res: ServerResponse,
-    ): void {
+    ): Promise<void> {
         const token = this.getCookie(req, "sdt_session");
 
         if (!token) {
@@ -210,7 +210,7 @@ export default class DashboardServer {
             return;
         }
 
-        const session = this.authService.getSession(token);
+        const session = await this.authService.getSession(token);
 
         if (!session) {
             res.statusCode = 401;
@@ -230,7 +230,7 @@ export default class DashboardServer {
         }));
     }
 
-    handle(req: IncomingMessage,
+    async handle(req: IncomingMessage,
         res: ServerResponse,) {
         const requestUrl = req.url ?? '';
         const pathname = requestUrl.split('?')[0];
@@ -245,7 +245,7 @@ export default class DashboardServer {
 
         // Everything under /_devtools/api from here requires auth
         if (pathname.startsWith("/_devtools/api/")) {
-            const session = this.authenticateRequest(req, res);
+            const session = await this.authenticateRequest(req, res);
 
             if (!session) {
                 return;
@@ -271,7 +271,7 @@ export default class DashboardServer {
             pathname === Config.DASHBOARD_API_ROUTES.TRACES
         ) {
             try {
-                this.storage.clearHistory();
+                await this.storage.clearHistory();
             } catch (error) {
                 debugLog("History clear failed", {
                     errorName: error instanceof Error ? error.name : typeof error,
@@ -295,10 +295,10 @@ export default class DashboardServer {
             const traceId = decodeURIComponent(pathname.slice(
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
-            let traceExists: ReturnType<SQLiteStorage["getTrace"]>;
+            let traceExists: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
             try {
-                traceExists = this.storage.getTrace(traceId);
+                traceExists = await this.storage.getTrace(traceId);
             } catch (error) {
                 debugLog("Trace lookup failed", {
                     traceId,
@@ -320,7 +320,7 @@ export default class DashboardServer {
             }
 
             try {
-                this.storage.deleteTrace(traceId);
+                await this.storage.deleteTrace(traceId);
             } catch (error) {
                 debugLog("Trace deletion failed", {
                     traceId,
@@ -350,10 +350,10 @@ export default class DashboardServer {
                 .replace(/\/execution$/, "");
 
 
-            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
             try {
-                trace = this.storage.getTrace(traceId)
+                trace = await this.storage.getTrace(traceId)
             } catch (error) {
                 debugLog("Trace lookup failed", {
                     traceId,
@@ -393,10 +393,10 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/request$/, "");
 
-            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
             try {
-                trace = this.storage.getTrace(traceId)
+                trace = await this.storage.getTrace(traceId)
             } catch (error) {
                 debugLog("Trace lookup failed", {
                     traceId,
@@ -416,10 +416,10 @@ export default class DashboardServer {
                 return;
             }
 
-            let metadata: ReturnType<SQLiteStorage["getTraceMetadata"]>;
+            let metadata: Awaited<ReturnType<SQLiteStorage["getTraceMetadata"]>>;
 
             try {
-                metadata = this.storage.getTraceMetadata(traceId)
+                metadata = await this.storage.getTraceMetadata(traceId)
             } catch (error) {
                 debugLog("Trace metadata lookup failed", {
                     traceId,
@@ -451,10 +451,10 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/response$/, "");
 
-            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
             try {
-                trace = this.storage.getTrace(traceId)
+                trace = await this.storage.getTrace(traceId)
             } catch (error) {
                 debugLog("Trace lookup failed", {
                     traceId,
@@ -474,10 +474,10 @@ export default class DashboardServer {
                 return;
             }
 
-            let metadata: ReturnType<SQLiteStorage["getTraceMetadata"]>;
+            let metadata: Awaited<ReturnType<SQLiteStorage["getTraceMetadata"]>>;
 
             try {
-                metadata = this.storage.getTraceMetadata(traceId)
+                metadata = await this.storage.getTraceMetadata(traceId)
             } catch (error) {
                 debugLog("Trace metadata lookup failed", {
                     traceId,
@@ -510,10 +510,10 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/errors$/, "");
 
-            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
             try {
-                trace = this.storage.getTrace(traceId)
+                trace = await this.storage.getTrace(traceId)
             } catch (error) {
                 debugLog("Trace lookup failed", {
                     traceId,
@@ -583,10 +583,10 @@ export default class DashboardServer {
                     return;
                 }
 
-                let trace: ReturnType<SQLiteStorage["getTrace"]>;
+                let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
                 try {
-                    trace = this.storage.getTrace(traceId);
+                    trace = await this.storage.getTrace(traceId);
                 } catch (error) {
                     debugLog("Trace lookup failed", {
                         traceId,
@@ -627,10 +627,10 @@ export default class DashboardServer {
                     return;
                 }
 
-                let details: ReturnType<SQLiteStorage["getHttpClientDetails"]>;
+                let details: Awaited<ReturnType<SQLiteStorage["getHttpClientDetails"]>>;
 
                 try {
-                    details = this.storage.getHttpClientDetails(spanId);
+                    details = await this.storage.getHttpClientDetails(spanId);
                 } catch (error) {
                     debugLog("HTTP client details lookup failed", {
                         spanId,
@@ -661,10 +661,10 @@ export default class DashboardServer {
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
 
-            let trace: ReturnType<SQLiteStorage["getTrace"]>;
+            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
 
             try {
-                trace = this.storage.getTrace(traceId)
+                trace = await this.storage.getTrace(traceId)
             } catch (error) {
                 debugLog("Trace lookup failed", {
                     traceId,
@@ -685,10 +685,10 @@ export default class DashboardServer {
                 return;
             }
 
-            let metadata: ReturnType<SQLiteStorage["getTraceMetadata"]>;
+            let metadata: Awaited<ReturnType<SQLiteStorage["getTraceMetadata"]>>;
 
             try {
-                metadata = this.storage.getTraceMetadata(traceId);
+                metadata = await this.storage.getTraceMetadata(traceId);
             } catch (error) {
                 debugLog("Trace metadata lookup failed", {
                     traceId,
@@ -760,10 +760,10 @@ export default class DashboardServer {
                 return;
             }
 
-            let summaries: ReturnType<SQLiteStorage["getPaginatedTraceSummaries"]>;
+            let summaries: Awaited<ReturnType<SQLiteStorage["getPaginatedTraceSummaries"]>>;
 
             try {
-                summaries = this.storage.getPaginatedTraceSummaries(
+                summaries = await this.storage.getPaginatedTraceSummaries(
                     page,
                     limit,
                     search,

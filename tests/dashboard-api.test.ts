@@ -39,15 +39,15 @@ async function run() {
       },
     ],
   };
-  for (const span of trace.spans) storage.saveSpan(span);
-  storage.saveTraceSummary(trace.spans[0]);
-  storage.saveCurrentUser('trace-123', {
+  for (const span of trace.spans) await storage.saveSpan(span);
+  await storage.saveTraceSummary(trace.spans[0]);
+  await storage.saveCurrentUser('trace-123', {
     id: 'user-123',
     email: 'godwin@example.com',
   });
 
   for (let index = 1; index <= 24; index += 1) {
-    storage.saveSpan({
+    await storage.saveSpan({
       traceId: `trace-page-${index}`,
       spanId: `root-page-${index}`,
       type: 'http.server',
@@ -61,7 +61,7 @@ async function run() {
       },
       status: { code: 0 },
     });
-    storage.saveTraceSummary(storage.getSpansByTraceId(`trace-page-${index}`)[0]);
+    await storage.saveTraceSummary((await storage.getSpansByTraceId(`trace-page-${index}`))[0]);
   }
 
   // 3. Start ServerDevTools' HTTP server
@@ -80,7 +80,7 @@ async function run() {
 
   assert(address && typeof address !== 'string');
 
-  const sessionToken = authService.createSession('admin');
+  const sessionToken = await authService.createSession('admin');
   const apiFetch = (path: string, init?: RequestInit) => fetch(
     `http://127.0.0.1:${address.port}${path}`,
     {
@@ -216,7 +216,7 @@ async function run() {
     assert.deepEqual(
       await traceResponse.json(),
       {
-        ...JSON.parse(JSON.stringify(storage.getTrace('trace-123'))),
+        ...JSON.parse(JSON.stringify(await storage.getTrace('trace-123'))),
         user: {
           id: 'user-123',
           email: 'godwin@example.com',
@@ -272,8 +272,8 @@ async function run() {
         },
       ],
     };
-    for (const span of executionTrace.spans) storage.saveSpan(span);
-    storage.saveTraceSummary(executionTrace.spans[0]);
+    for (const span of executionTrace.spans) await storage.saveSpan(span);
+    await storage.saveTraceSummary(executionTrace.spans[0]);
 
     const executionResponse = await apiFetch('/_devtools/api/traces/trace-execution/execution');
 
@@ -326,7 +326,7 @@ async function run() {
         else resolve();
       });
     });
-    storage.close();
+    await storage.close();
   }
 }
 

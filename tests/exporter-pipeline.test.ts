@@ -8,6 +8,7 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import ServerDevToolsExporter from '../src/instrumentation/exporter';
 import SQLiteStorage from '../src/storage/sqlite-storage';
 
+async function run(): Promise<void> {
 const storage = new SQLiteStorage(":memory:");
 
 
@@ -42,15 +43,30 @@ const span = {
   },
 } as unknown as ReadableSpan;
 
-exporter.export([span], () => { });
+await new Promise<void>((resolve, reject) => exporter.export([span], (result) => {
+  if (result.error) reject(result.error);
+  else resolve();
+}));
 
-const trace = storage.getTrace('trace-123');
+const trace = await storage.getTrace('trace-123');
 
 assert.ok(trace);
 assert.equal(trace.traceId, 'trace-123');
 assert.equal(trace.rootSpanId, 'span-123');
 assert.equal(trace.spans.length, 1);
 
-storage.close();
+await storage.close();
+
+const failingExporter = new ServerDevToolsExporter({
+  saveSpan: async () => { throw new Error("write failed"); },
+} as unknown as SQLiteStorage);
+const failure = await new Promise<Error>((resolve) => failingExporter.export([span], (result) => {
+  assert.equal(result.code, 1);
+  resolve(result.error!);
+}));
+assert.equal(failure.message, "write failed");
 
 console.log('Exporter pipeline test passed');
+}
+
+void run();

@@ -36,7 +36,7 @@ class AuthService {
     }
 
 
-    createSession(username: string): string {
+    async createSession(username: string): Promise<string> {
         const token = this.generateSessionToken();
         const sessionHash = this.hashSessionToken(token);
 
@@ -46,7 +46,7 @@ class AuthService {
         const normalizedUsername = username?.toLowerCase()?.trim()
 
         try {
-            this.storage.saveSession({
+            await this.storage.saveSession({
                 sessionHash,
                 username: normalizedUsername,
                 createdAt,
@@ -62,13 +62,13 @@ class AuthService {
         return token;
     }
 
-    getSession(token: string): ISession | undefined {
+    async getSession(token: string): Promise<ISession | undefined> {
         const currentDate = Date.now()
         const sessionHash = this.hashSessionToken(token)
         let session: ISession | undefined;
 
         try {
-            session = this.storage.getSessionByHash(sessionHash)
+            session = await this.storage.getSessionByHash(sessionHash)
         } catch (error) {
             debugLog("Session lookup failed", {
                 errorName: error instanceof Error ? error.name : typeof error,
@@ -80,7 +80,7 @@ class AuthService {
         const hasExpired = session.expiresAt <= currentDate
         if (hasExpired) {
             try {
-                this.storage.deleteSession(sessionHash)
+                await this.storage.deleteSession(sessionHash)
             } catch (error) {
                 debugLog("Expired session cleanup failed", {
                     errorName: error instanceof Error ? error.name : typeof error,
@@ -92,10 +92,10 @@ class AuthService {
         return session
     }
 
-    deleteSession(token: string): void {
+    async deleteSession(token: string): Promise<void> {
         const sessionHash = this.hashSessionToken(token)
         try {
-            this.storage.deleteSession(sessionHash)
+            await this.storage.deleteSession(sessionHash)
         } catch (error) {
             debugLog("Session deletion failed", {
                 errorName: error instanceof Error ? error.name : typeof error,

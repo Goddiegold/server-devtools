@@ -121,7 +121,12 @@ class ServerDevTools {
                 }
 
                 try {
-                    storage.saveResponseBody(traceId, body)
+                    void storage.saveResponseBody(traceId, body).catch((error) => {
+                        debugLog("Response body capture failed", {
+                            traceId,
+                            errorName: error instanceof Error ? error.name : typeof error,
+                        });
+                    });
                 } catch (error) {
                     debugLog("Response body capture failed", {
                         traceId,
@@ -135,7 +140,12 @@ class ServerDevTools {
                 res.once("finish", () => {
                     try {
                         const user = this.getCurrentUser?.(req);
-                        this.storage.saveCurrentUser(traceId, user!)
+                        void this.storage.saveCurrentUser(traceId, user!).catch((error) => {
+                            debugLog("Current user capture failed", {
+                                traceId,
+                                errorName: error instanceof Error ? error.name : typeof error,
+                            });
+                        });
                     } catch (error) {
                         debugLog("Current user capture failed", {
                             traceId,

@@ -8,6 +8,7 @@ import SQLiteStorage from "../src/storage/sqlite-storage";
 import EncryptDecryptService from "../src/security/encrypt-decrypt.service";
 import { IDevToolsSpan } from "../src/types";
 
+async function run(): Promise<void> {
 /**
  * Basic SQLite storage tests
  */
@@ -15,7 +16,7 @@ import { IDevToolsSpan } from "../src/types";
 const storage = new SQLiteStorage(":memory:");
 
 // Save root span
-storage.saveSpan({
+await storage.saveSpan({
     traceId: "trace-1",
     spanId: "span-1",
     type: "http.server",
@@ -31,7 +32,7 @@ storage.saveSpan({
 });
 
 // Verify single-span read
-const spans = storage.getSpansByTraceId("trace-1");
+const spans = await storage.getSpansByTraceId("trace-1");
 
 assert.equal(spans.length, 1);
 assert.equal(spans[0].spanId, "span-1");
@@ -47,7 +48,7 @@ assert.deepEqual(spans[0].status, {
 });
 
 // Add child span
-storage.saveSpan({
+await storage.saveSpan({
     traceId: "trace-1",
     spanId: "span-2",
     parentSpanId: "span-1",
@@ -64,7 +65,7 @@ storage.saveSpan({
 });
 
 // Verify complete trace reconstruction
-const trace = storage.getTrace("trace-1");
+const trace = await storage.getTrace("trace-1");
 
 assert.ok(trace);
 assert.equal(trace.traceId, "trace-1");
@@ -76,12 +77,12 @@ assert.equal(trace.durationMs, 42);
 
 // Verify missing trace
 assert.equal(
-    storage.getTrace("does-not-exist"),
+    await storage.getTrace("does-not-exist"),
     undefined,
 );
 
 // Save trace summary
-storage.saveTraceSummary({
+await storage.saveTraceSummary({
     traceId: "trace-1",
     spanId: "span-1",
     type: "http.server",
@@ -98,9 +99,12 @@ storage.saveTraceSummary({
         code: 0,
     },
 });
+await storage.updateHttpClientDetails("span-1", {
+    requestHeaders: { authorization: "secret" },
+});
 
 // Verify trace summaries
-const summaries = storage.getTraceSummaries();
+const summaries = await storage.getTraceSummaries();
 
 assert.equal(summaries.length, 1);
 
@@ -123,10 +127,10 @@ const currentUser = {
 };
 
 // A user can be saved before the trace summary exists.
-storage.saveCurrentUser("trace-before-summary", currentUser);
-assert.deepEqual(storage.getTraceSummaries(), [summaries[0]]);
+await storage.saveCurrentUser("trace-before-summary", currentUser);
+assert.deepEqual(await storage.getTraceSummaries(), [summaries[0]]);
 
-storage.saveTraceSummary({
+await storage.saveTraceSummary({
     traceId: "trace-before-summary",
     spanId: "trace-before-summary-root",
     type: "http.server",
@@ -142,31 +146,31 @@ storage.saveTraceSummary({
 });
 
 assert.deepEqual(
-    storage.getTraceSummaries().find(summary => summary.traceId === "trace-before-summary")?.user,
+    (await storage.getTraceSummaries()).find(summary => summary.traceId === "trace-before-summary")?.user,
     currentUser,
 );
 
 // A user can also be saved after the trace summary already exists.
-storage.saveCurrentUser("trace-1", currentUser);
+await storage.saveCurrentUser("trace-1", currentUser);
 assert.deepEqual(
-    storage.getTraceSummaries().find(summary => summary.traceId === "trace-1")?.user,
+    (await storage.getTraceSummaries()).find(summary => summary.traceId === "trace-1")?.user,
     currentUser,
 );
 
 // Save request metadata
-storage.saveRequestBody("trace-1", {
+await storage.saveRequestBody("trace-1", {
     email: "john@example.com",
     password: "secret",
 });
 
 // Save response metadata
-storage.saveResponseBody("trace-1", {
+await storage.saveResponseBody("trace-1", {
     id: 123,
     success: true,
 });
 
 // Read metadata back
-const metadata = storage.getTraceMetadata("trace-1");
+const metadata = await storage.getTraceMetadata("trace-1");
 
 assert.deepEqual(metadata, {
     request: {
@@ -186,31 +190,32 @@ assert.deepEqual(metadata, {
 
 // Updating user metadata preserves request and response metadata.
 const updatedUser = { ...currentUser, role: "admin" };
-storage.saveCurrentUser("trace-1", updatedUser);
-assert.deepEqual(storage.getTraceMetadata("trace-1"), {
+await storage.saveCurrentUser("trace-1", updatedUser);
+assert.deepEqual(await storage.getTraceMetadata("trace-1"), {
     ...metadata,
     user: updatedUser,
 });
 
 assert.deepEqual(
-    storage.getTraceSummaries().find(summary => summary.traceId === "trace-before-summary")?.user,
+    (await storage.getTraceSummaries()).find(summary => summary.traceId === "trace-before-summary")?.user,
     currentUser,
 );
 
 // Missing metadata
 assert.equal(
-    storage.getTraceMetadata("missing-trace"),
+    await storage.getTraceMetadata("missing-trace"),
     undefined,
 );
 
 // Delete all persisted data for one trace.
-storage.deleteTrace("trace-1");
-storage.deleteTrace("trace-before-summary");
+await storage.deleteTrace("trace-1");
+await storage.deleteTrace("trace-before-summary");
 
-assert.equal(storage.getTrace("trace-1"), undefined);
-assert.deepEqual(storage.getSpansByTraceId("trace-1"), []);
-assert.equal(storage.getTraceMetadata("trace-1"), undefined);
-assert.deepEqual(storage.getTraceSummaries(), []);
+assert.equal(await storage.getTrace("trace-1"), undefined);
+assert.deepEqual(await storage.getSpansByTraceId("trace-1"), []);
+assert.equal(await storage.getTraceMetadata("trace-1"), undefined);
+assert.equal(await storage.getHttpClientDetails("span-1"), undefined);
+assert.deepEqual(await storage.getTraceSummaries(), []);
 
 // Clear all history and verify the storage can be reused afterward.
 for (const traceId of ["trace-2", "trace-3"]) {
@@ -229,19 +234,24 @@ for (const traceId of ["trace-2", "trace-3"]) {
         },
     };
 
-    storage.saveSpan(rootSpan);
-    storage.saveTraceSummary(rootSpan);
-    storage.saveRequestBody(traceId, { traceId });
-    storage.saveResponseBody(traceId, { ok: true });
+    await storage.saveSpan(rootSpan);
+    await storage.saveTraceSummary(rootSpan);
+    await storage.saveRequestBody(traceId, { traceId });
+    await storage.saveResponseBody(traceId, { ok: true });
+    await storage.updateHttpClientDetails(`${traceId}-root`, {
+        responseBody: { traceId },
+    });
 }
 
-storage.clearHistory();
+await storage.clearHistory();
 
-assert.deepEqual(storage.getTraceSummaries(), []);
-assert.equal(storage.getTrace("trace-2"), undefined);
-assert.equal(storage.getTrace("trace-3"), undefined);
-assert.equal(storage.getTraceMetadata("trace-2"), undefined);
-assert.equal(storage.getTraceMetadata("trace-3"), undefined);
+assert.deepEqual(await storage.getTraceSummaries(), []);
+assert.equal(await storage.getTrace("trace-2"), undefined);
+assert.equal(await storage.getTrace("trace-3"), undefined);
+assert.equal(await storage.getTraceMetadata("trace-2"), undefined);
+assert.equal(await storage.getTraceMetadata("trace-3"), undefined);
+assert.equal(await storage.getHttpClientDetails("trace-2-root"), undefined);
+assert.equal(await storage.getHttpClientDetails("trace-3-root"), undefined);
 
 const postClearTrace: IDevToolsSpan = {
     traceId: "trace-after-clear",
@@ -258,13 +268,30 @@ const postClearTrace: IDevToolsSpan = {
     },
 };
 
-storage.saveSpan(postClearTrace);
-storage.saveTraceSummary(postClearTrace);
+await storage.saveSpan(postClearTrace);
+await storage.saveTraceSummary(postClearTrace);
 
-assert.equal(storage.getTrace("trace-after-clear")?.traceId, "trace-after-clear");
-assert.equal(storage.getTraceSummaries().length, 1);
+assert.equal((await storage.getTrace("trace-after-clear"))?.traceId, "trace-after-clear");
+assert.equal((await storage.getTraceSummaries()).length, 1);
 
-storage.close();
+await storage.close();
+
+const pendingStorage = new SQLiteStorage(":memory:");
+pendingStorage.saveSpan({
+    traceId: "pending-trace",
+    spanId: "pending-span",
+    type: "http.server",
+    name: "GET /pending",
+    startedAt: 1,
+    durationMs: 1,
+    attributes: {},
+    status: { code: 0 },
+});
+await pendingStorage.close();
+
+const failedDeleteStorage = new SQLiteStorage(":memory:");
+await failedDeleteStorage.close();
+await assert.rejects(failedDeleteStorage.deleteTrace("closed-storage"));
 
 /**
  * Schema version and migration tests
@@ -320,7 +347,8 @@ function getTableNames(database: DatabaseSync): string[] {
 
     try {
         const storage = new SQLiteStorage(temporaryDatabase.path);
-        storage.close();
+        await storage.initialize();
+        await storage.close();
 
         const database = new DatabaseSync(temporaryDatabase.path);
 
@@ -406,6 +434,7 @@ function getTableNames(database: DatabaseSync): string[] {
 
     try {
         const storage = new SQLiteStorage(temporaryDatabase.path);
+        await storage.initialize();
         const database = new DatabaseSync(temporaryDatabase.path);
 
         assert.equal(getUserVersion(database), 1);
@@ -432,9 +461,9 @@ function getTableNames(database: DatabaseSync): string[] {
             assert.ok(getTableNames(database).includes(tableName));
         }
 
-        assert.equal(storage.getTraceSummaries()[0]?.traceId, "legacy-trace");
+        assert.equal((await storage.getTraceSummaries())[0]?.traceId, "legacy-trace");
 
-        storage.close();
+        await storage.close();
         database.close();
     } finally {
         rmSync(temporaryDatabase.directory, { recursive: true, force: true });
@@ -448,7 +477,7 @@ function getTableNames(database: DatabaseSync): string[] {
 
     try {
         const storage = new SQLiteStorage(temporaryDatabase.path);
-        storage.saveTraceSummary({
+        await storage.saveTraceSummary({
             traceId: "versioned-trace",
             spanId: "versioned-root",
             type: "http.server",
@@ -462,18 +491,18 @@ function getTableNames(database: DatabaseSync): string[] {
                 code: 0,
             },
         });
-        storage.close();
+        await storage.close();
 
         const reopenedStorage = new SQLiteStorage(temporaryDatabase.path);
         const database = new DatabaseSync(temporaryDatabase.path);
 
         assert.equal(getUserVersion(database), 1);
         assert.equal(
-            reopenedStorage.getTraceSummaries()[0]?.traceId,
+            (await reopenedStorage.getTraceSummaries())[0]?.traceId,
             "versioned-trace",
         );
 
-        reopenedStorage.close();
+        await reopenedStorage.close();
         database.close();
     } finally {
         rmSync(temporaryDatabase.directory, { recursive: true, force: true });
@@ -526,12 +555,12 @@ const responseBody = {
     authorization: "Bearer secret-token",
 };
 
-encryptedStorage.saveRequestBody(
+await encryptedStorage.saveRequestBody(
     "encrypted-trace",
     requestBody,
 );
 
-encryptedStorage.saveResponseBody(
+await encryptedStorage.saveResponseBody(
     "encrypted-trace",
     responseBody,
 );
@@ -541,7 +570,7 @@ const encryptedUser = {
     password: "user-secret",
 };
 
-encryptedStorage.saveCurrentUser(
+await encryptedStorage.saveCurrentUser(
     "encrypted-trace",
     encryptedUser,
 );
@@ -551,7 +580,7 @@ encryptedStorage.saveCurrentUser(
  * its original representation.
  */
 const encryptedMetadata =
-    encryptedStorage.getTraceMetadata(
+    await encryptedStorage.getTraceMetadata(
         "encrypted-trace",
     );
 
@@ -565,7 +594,7 @@ assert.deepEqual(encryptedMetadata, {
     user: encryptedUser,
 });
 
-encryptedStorage.close();
+await encryptedStorage.close();
 
 /**
  * Inspect SQLite directly.
@@ -642,3 +671,6 @@ rawDb.close();
 unlinkSync(encryptedDbPath);
 
 console.log("sqlite storage tests passed");
+}
+
+void run();

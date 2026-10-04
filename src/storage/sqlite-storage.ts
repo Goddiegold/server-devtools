@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 import Config from "../config";
+import { IStorage } from "./storage.interface";
 
 
 interface ISessionRow {
@@ -10,15 +11,18 @@ interface ISessionRow {
     created_at: number;
     expires_at: number;
 }
-export default class SQLiteStorage {
+export default class SQLiteStorage implements IStorage {
     private readonly db: DatabaseSync;
+    private initializationPromise?: Promise<void>;
+    private readonly pendingWrites = new Set<Promise<void>>();
+    private isClosing = false;
+    private closePromise?: Promise<void>;
 
     constructor(path: string,
         private readonly encryptionService?: EncryptDecryptService,
     ) {
         this.db = new DatabaseSync(path);
 
-        this.initialize();
     }
 
     private getSchemaVersion(): number {
@@ -107,7 +111,7 @@ export default class SQLiteStorage {
         }
     }
 
-    private initialize(): void {
+    private initializeSchema(): void {
         const version = this.getSchemaVersion();
 
         if (version === Config.STORAGE.SCHEMA_VERSION) {
@@ -129,6 +133,35 @@ export default class SQLiteStorage {
         }
     }
 
+    initialize(): Promise<void> {
+        if (!this.initializationPromise) {
+            this.initializationPromise = Promise.resolve().then(() => {
+                this.initializeSchema();
+            });
+        }
+
+        return this.initializationPromise;
+    }
+
+    private ensureInitialized(): Promise<void> {
+        if (this.isClosing) {
+            return Promise.reject(new Error("Storage is closing"));
+        }
+
+        return this.initialize();
+    }
+
+    private trackWrite(operation: () => void): Promise<void> {
+        if (this.isClosing) {
+            return Promise.reject(new Error("Storage is closing"));
+        }
+
+        const write = this.initialize().then(operation);
+        this.pendingWrites.add(write);
+        void write.finally(() => this.pendingWrites.delete(write)).catch(() => undefined);
+        return write;
+    }
+
     private deserializeSensitiveValue<T>(value: string): T {
         const parsed = JSON.parse(value);
 
@@ -145,7 +178,8 @@ export default class SQLiteStorage {
         return JSON.stringify(encrypted);
     }
 
-    saveSpan(span: IDevToolsSpan): void {
+    saveSpan(span: IDevToolsSpan): Promise<void> {
+        return this.trackWrite(() => {
         const statement = this.db.prepare(`
         INSERT OR REPLACE INTO spans (
             span_id,
@@ -186,9 +220,11 @@ export default class SQLiteStorage {
             WHERE trace_id = ?
         `).run(span.traceId);
         }
+        });
     }
 
-    getSpansByTraceId(traceId: string): IDevToolsSpan[] {
+    async getSpansByTraceId(traceId: string): Promise<IDevToolsSpan[]> {
+        await this.ensureInitialized();
         const statement = this.db.prepare(`
         SELECT
             span_id,
@@ -224,8 +260,8 @@ export default class SQLiteStorage {
         }));
     }
 
-    getTrace(traceId: string): IDevToolsTrace | undefined {
-        const spans = this.getSpansByTraceId(traceId);
+    async getTrace(traceId: string): Promise<IDevToolsTrace | undefined> {
+        const spans = await this.getSpansByTraceId(traceId);
 
         if (spans.length === 0) {
             return undefined;
@@ -246,7 +282,8 @@ export default class SQLiteStorage {
         };
     }
 
-    saveTraceSummary(span: IDevToolsSpan): void {
+    saveTraceSummary(span: IDevToolsSpan): Promise<void> {
+        return this.trackWrite(() => {
         if (span.parentSpanId) {
             return;
         }
@@ -325,9 +362,11 @@ export default class SQLiteStorage {
             hasError,
             Date.now(),
         );
+        });
     }
 
-    getTraceSummaries(): ITraceSummary[] {
+    async getTraceSummaries(): Promise<ITraceSummary[]> {
+        await this.ensureInitialized();
         const statement = this.db.prepare(`
         SELECT
             t.*,
@@ -364,16 +403,17 @@ export default class SQLiteStorage {
         });
     }
 
-    getPaginatedTraceSummaries(
+    async getPaginatedTraceSummaries(
         page: number,
         limit: number,
         search = "",
         method?: string,
         statusCode?: number,
-    ): {
+    ): Promise<{
         summaries: ITraceSummary[];
         total: number;
-    } {
+    }> {
+        await this.ensureInitialized();
         const offset = (page - 1) * limit;
         const conditions: string[] = [];
         const parameters: (string | number)[] = [];
@@ -455,7 +495,8 @@ export default class SQLiteStorage {
         return { summaries, total: totalRow.total };
     }
 
-    saveRequestBody(traceId: string, body: unknown): void {
+    saveRequestBody(traceId: string, body: unknown): Promise<void> {
+        return this.trackWrite(() => {
         const statement = this.db.prepare(`
         INSERT INTO trace_metadata (
             trace_id,
@@ -474,9 +515,11 @@ export default class SQLiteStorage {
             traceId,
             JSON.stringify(data),
         );
+        });
     }
 
-    saveResponseBody(traceId: string, body: unknown): void {
+    saveResponseBody(traceId: string, body: unknown): Promise<void> {
+        return this.trackWrite(() => {
         const statement = this.db.prepare(`
         INSERT INTO trace_metadata (
             trace_id,
@@ -495,9 +538,11 @@ export default class SQLiteStorage {
             traceId,
             JSON.stringify(data),
         );
+        });
     }
 
-    getTraceMetadata(traceId: string): ITraceMetadata | undefined {
+    async getTraceMetadata(traceId: string): Promise<ITraceMetadata | undefined> {
+        await this.ensureInitialized();
         const statement = this.db.prepare(`
         SELECT
             request_body,
@@ -553,13 +598,19 @@ export default class SQLiteStorage {
         };
     }
 
-    deleteTrace(traceId: string): void {
+    deleteTrace(traceId: string): Promise<void> {
+        return this.trackWrite(() => {
         this.db.exec("BEGIN");
 
         try {
             this.db.prepare(`
             DELETE FROM trace_metadata
             WHERE trace_id = ?
+        `).run(traceId);
+
+            this.db.prepare(`
+            DELETE FROM http_client_details
+            WHERE span_id IN (SELECT span_id FROM spans WHERE trace_id = ?)
         `).run(traceId);
 
             this.db.prepare(`
@@ -575,10 +626,13 @@ export default class SQLiteStorage {
             this.db.exec("COMMIT");
         } catch (error) {
             this.db.exec("ROLLBACK");
+            throw error;
         }
+        });
     }
 
-    clearHistory(): void {
+    clearHistory(): Promise<void> {
+        return this.trackWrite(() => {
         this.db.exec("BEGIN");
 
         try {
@@ -586,6 +640,7 @@ export default class SQLiteStorage {
             DELETE FROM trace_metadata;
             DELETE FROM spans;
             DELETE FROM traces;
+            DELETE FROM http_client_details;
         `);
 
             this.db.exec("COMMIT");
@@ -593,9 +648,11 @@ export default class SQLiteStorage {
             this.db.exec("ROLLBACK");
             throw error;
         }
+        });
     }
 
-    saveSession(session: ISession): void {
+    saveSession(session: ISession): Promise<void> {
+        return this.trackWrite(() => {
         this.db.prepare(`
         INSERT INTO sessions (
             session_hash,
@@ -610,9 +667,11 @@ export default class SQLiteStorage {
             session.createdAt,
             session.expiresAt,
         );
+        });
     }
 
-    getSessionByHash(sessionHash: string): ISession | undefined {
+    async getSessionByHash(sessionHash: string): Promise<ISession | undefined> {
+        await this.ensureInitialized();
         const row = this.db.prepare(`
         SELECT
             session_hash,
@@ -633,17 +692,20 @@ export default class SQLiteStorage {
         };
     }
 
-    deleteSession(sessionHash: string) {
+    deleteSession(sessionHash: string): Promise<void> {
+        return this.trackWrite(() => {
         this.db.prepare(`
             DELETE FROM sessions
             WHERE session_hash = ?
         `).run(sessionHash);
+        });
     }
 
     saveCurrentUser(
         traceId: string,
         user: IDevToolsCurrentUser,
-    ) {
+    ): Promise<void> {
+        return this.trackWrite(() => {
         const processedUser = this.encryptionService
             ? this.encryptionService.encryptData(user)
             : user;
@@ -659,12 +721,14 @@ export default class SQLiteStorage {
         ON CONFLICT(trace_id) DO UPDATE SET
             user_json = excluded.user_json
     `).run(traceId, userJson);
+        });
     }
 
     updateHttpClientDetails(
         spanId: string,
         details: Partial<Omit<IHttpClientDetails, "spanId">>,
-    ): void {
+    ): Promise<void> {
+        return this.trackWrite(() => {
         const fields: string[] = [];
         const values: (string | null)[] = [];
 
@@ -734,11 +798,13 @@ export default class SQLiteStorage {
       WHERE span_id = ?
     `)
             .run(...values);
+        });
     }
 
-    getHttpClientDetails(
+    async getHttpClientDetails(
         spanId: string,
-    ): IHttpClientDetails | undefined {
+    ): Promise<IHttpClientDetails | undefined> {
+        await this.ensureInitialized();
         const row = this.db
             .prepare(`
       SELECT
@@ -785,7 +851,47 @@ export default class SQLiteStorage {
         };
     }
 
-    close(): void {
-        this.db.close();
+    close(): Promise<void> {
+        if (this.closePromise) {
+            return this.closePromise;
+        }
+
+        this.isClosing = true;
+        this.closePromise = (async () => {
+            let closeError: unknown;
+            let hasCloseError = false;
+
+            try {
+                await this.initialize();
+            } catch (error) {
+                closeError = error;
+                hasCloseError = true;
+            }
+
+            try {
+                while (this.pendingWrites.size > 0) {
+                    const writes = [...this.pendingWrites];
+                    const results = await Promise.allSettled(writes);
+
+                    for (let index = 0; index < results.length; index += 1) {
+                        this.pendingWrites.delete(writes[index]);
+
+                        const result = results[index];
+                        if (result.status === "rejected" && !hasCloseError) {
+                            closeError = result.reason;
+                            hasCloseError = true;
+                        }
+                    }
+                }
+
+                if (hasCloseError) {
+                    throw closeError;
+                }
+            } finally {
+                this.db.close();
+            }
+        })();
+
+        return this.closePromise;
     }
 }
