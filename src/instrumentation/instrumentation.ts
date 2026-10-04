@@ -5,7 +5,7 @@ import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import ServerDevToolsExporter from "./exporter";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
-import SQLiteStorage from "../storage/sqlite-storage";
+import type { IStorage } from "../storage/storage.interface";
 import { OutboundHttpCapture } from "./outbound-http/outbound-http-capture";
 import { ClientRequest, IncomingMessage } from "node:http";
 import { debugLog } from "../utils/logger";
@@ -24,7 +24,7 @@ export class Instrumentation {
     private isShutdown = false;
 
     constructor(
-        private readonly storage: SQLiteStorage
+        private readonly storage: IStorage
     ) {
         this.outboundHttpCapture =
             new OutboundHttpCapture(storage);

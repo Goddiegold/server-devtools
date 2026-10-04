@@ -1,4 +1,4 @@
-import SQLiteStorage from "../storage/sqlite-storage";
+import type { IStorage } from "../storage/storage.interface";
 import { ISession } from "../types";
 import { debugLog } from "../utils/logger";
 import crypto from "node:crypto";
@@ -7,7 +7,7 @@ class AuthService {
     constructor(
         private readonly username: string,
         private readonly password: string,
-        private readonly storage: SQLiteStorage,
+        private readonly storage: IStorage,
     ) {
         this.username = this.username ? this.username?.toLowerCase()?.trim() : ''
     }

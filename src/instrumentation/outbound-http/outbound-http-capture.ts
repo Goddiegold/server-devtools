@@ -1,5 +1,5 @@
 import { ClientRequest, IncomingMessage } from "node:http";
-import SQLiteStorage from "../../storage/sqlite-storage";
+import type { IStorage } from "../../storage/storage.interface";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { debugLog } from "../../utils/logger";
 interface FetchCaptureContext {
@@ -13,7 +13,7 @@ export class OutboundHttpCapture {
   private fetchWrapper?: typeof globalThis.fetch;
 
   constructor(
-    private readonly storage: SQLiteStorage,
+    private readonly storage: IStorage,
   ) { }
 
   trackNativeRequest(

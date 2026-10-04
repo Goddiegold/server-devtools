@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
-import SQLiteStorage from "../storage/sqlite-storage";
+import type { IStorage } from "../storage/storage.interface";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
@@ -34,7 +34,7 @@ export default class DashboardServer {
 
 
     constructor(
-        private readonly storage: SQLiteStorage,
+        private readonly storage: IStorage,
         private readonly authService: AuthService
     ) {
     }
@@ -295,7 +295,7 @@ export default class DashboardServer {
             const traceId = decodeURIComponent(pathname.slice(
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
-            let traceExists: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+            let traceExists: Awaited<ReturnType<IStorage["getTrace"]>>;
 
             try {
                 traceExists = await this.storage.getTrace(traceId);
@@ -350,7 +350,7 @@ export default class DashboardServer {
                 .replace(/\/execution$/, "");
 
 
-            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+            let trace: Awaited<ReturnType<IStorage["getTrace"]>>;
 
             try {
                 trace = await this.storage.getTrace(traceId)
@@ -393,7 +393,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/request$/, "");
 
-            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+            let trace: Awaited<ReturnType<IStorage["getTrace"]>>;
 
             try {
                 trace = await this.storage.getTrace(traceId)
@@ -416,7 +416,7 @@ export default class DashboardServer {
                 return;
             }
 
-            let metadata: Awaited<ReturnType<SQLiteStorage["getTraceMetadata"]>>;
+            let metadata: Awaited<ReturnType<IStorage["getTraceMetadata"]>>;
 
             try {
                 metadata = await this.storage.getTraceMetadata(traceId)
@@ -451,7 +451,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/response$/, "");
 
-            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+            let trace: Awaited<ReturnType<IStorage["getTrace"]>>;
 
             try {
                 trace = await this.storage.getTrace(traceId)
@@ -474,7 +474,7 @@ export default class DashboardServer {
                 return;
             }
 
-            let metadata: Awaited<ReturnType<SQLiteStorage["getTraceMetadata"]>>;
+            let metadata: Awaited<ReturnType<IStorage["getTraceMetadata"]>>;
 
             try {
                 metadata = await this.storage.getTraceMetadata(traceId)
@@ -510,7 +510,7 @@ export default class DashboardServer {
                 .slice(prefix.length)
                 .replace(/\/errors$/, "");
 
-            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+            let trace: Awaited<ReturnType<IStorage["getTrace"]>>;
 
             try {
                 trace = await this.storage.getTrace(traceId)
@@ -583,7 +583,7 @@ export default class DashboardServer {
                     return;
                 }
 
-                let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+                let trace: Awaited<ReturnType<IStorage["getTrace"]>>;
 
                 try {
                     trace = await this.storage.getTrace(traceId);
@@ -627,7 +627,7 @@ export default class DashboardServer {
                     return;
                 }
 
-                let details: Awaited<ReturnType<SQLiteStorage["getHttpClientDetails"]>>;
+                let details: Awaited<ReturnType<IStorage["getHttpClientDetails"]>>;
 
                 try {
                     details = await this.storage.getHttpClientDetails(spanId);
@@ -661,7 +661,7 @@ export default class DashboardServer {
                 `${Config.DASHBOARD_API_ROUTES.TRACES}/`.length
             ));
 
-            let trace: Awaited<ReturnType<SQLiteStorage["getTrace"]>>;
+            let trace: Awaited<ReturnType<IStorage["getTrace"]>>;
 
             try {
                 trace = await this.storage.getTrace(traceId)
@@ -685,7 +685,7 @@ export default class DashboardServer {
                 return;
             }
 
-            let metadata: Awaited<ReturnType<SQLiteStorage["getTraceMetadata"]>>;
+            let metadata: Awaited<ReturnType<IStorage["getTraceMetadata"]>>;
 
             try {
                 metadata = await this.storage.getTraceMetadata(traceId);
@@ -760,7 +760,7 @@ export default class DashboardServer {
                 return;
             }
 
-            let summaries: Awaited<ReturnType<SQLiteStorage["getPaginatedTraceSummaries"]>>;
+            let summaries: Awaited<ReturnType<IStorage["getPaginatedTraceSummaries"]>>;
 
             try {
                 summaries = await this.storage.getPaginatedTraceSummaries(

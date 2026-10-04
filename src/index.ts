@@ -1,11 +1,10 @@
-// import { Instrumentation } from "./instumentations/instrumentation";
-
 import { context, trace } from "@opentelemetry/api";
 import { IncomingMessage, ServerResponse } from "node:http";
 import DashboardServer from "./dashboard/dashboard-server";
 import { Instrumentation } from "./instrumentation/instrumentation";
 import { IServerDevlToolsParams } from "./types";
 import SQLiteStorage from "./storage/sqlite-storage";
+import type { IStorage } from "./storage/storage.interface";
 import EncryptDecryptService from "./security/encrypt-decrypt.service";
 import Config from "./config";
 import AuthService from "./security/auth.service";
@@ -14,7 +13,7 @@ import { debugLog } from "./utils/logger";
 class ServerDevTools {
     private instrumentation: Instrumentation;
     private dashboard: DashboardServer;
-    private storage: SQLiteStorage
+    private storage: IStorage
     private authService: AuthService
     private readonly getCurrentUser?: IServerDevlToolsParams["getCurrentUser"];
 
