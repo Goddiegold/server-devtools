@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 import Config from "../config";
-import { IStorage } from "./storage.interface";
+import { IStorage } from "../types";
 
 
 interface ISessionRow {

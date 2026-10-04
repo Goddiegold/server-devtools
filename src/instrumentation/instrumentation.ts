@@ -5,7 +5,7 @@ import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import ServerDevToolsExporter from "./exporter";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
-import type { IStorage } from "../storage/storage.interface";
+import type { IStorage } from "../types/storage.interface";
 import { OutboundHttpCapture } from "./outbound-http/outbound-http-capture";
 import { ClientRequest, IncomingMessage } from "node:http";
 import { debugLog } from "../utils/logger";

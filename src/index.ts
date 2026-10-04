@@ -4,7 +4,7 @@ import DashboardServer from "./dashboard/dashboard-server";
 import { Instrumentation } from "./instrumentation/instrumentation";
 import { IServerDevlToolsParams } from "./types";
 import SQLiteStorage from "./storage/sqlite-storage";
-import type { IStorage } from "./storage/storage.interface";
+import type { IStorage } from "./types";
 import EncryptDecryptService from "./security/encrypt-decrypt.service";
 import Config from "./config";
 import AuthService from "./security/auth.service";

@@ -1,5 +1,5 @@
 import { ClientRequest, IncomingMessage } from "node:http";
-import type { IStorage } from "../../storage/storage.interface";
+import type { IStorage } from "../../types";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { debugLog } from "../../utils/logger";
 interface FetchCaptureContext {

@@ -1,7 +1,7 @@
 import { ExportResult, ExportResultCode } from "@opentelemetry/core";
 import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-node";
 import SpanMapper from "./span-mapper";
-import type { IStorage } from "../storage/storage.interface";
+import type { IStorage } from "../types";
 import { debugLog } from "../utils/logger";
 
 

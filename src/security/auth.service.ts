@@ -1,4 +1,4 @@
-import type { IStorage } from "../storage/storage.interface";
+import type { IStorage } from "../types";
 import { ISession } from "../types";
 import { debugLog } from "../utils/logger";
 import crypto from "node:crypto";

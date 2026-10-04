@@ -6,7 +6,7 @@ import type {
     ISession,
     ITraceMetadata,
     ITraceSummary,
-} from "../types";
+} from ".";
 
 export interface IStorage {
     initialize(): Promise<void>;

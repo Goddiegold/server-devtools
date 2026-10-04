@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
-import type { IStorage } from "../storage/storage.interface";
+import type { IStorage } from "../types";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
