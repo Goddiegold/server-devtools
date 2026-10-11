@@ -4,11 +4,21 @@ import { Express } from "express";
 import type { IncomingMessage } from "node:http";
 
 import ServerDevTools from "../../src";
+import { SUPPORTED_DB } from "../../src/types";
 
 async function bootstrap() {
   const devtools = new ServerDevTools({
     encryption: {
       key: "K2I3QiRWSThQR2JWUHNbRXAmRXcuJChteVBCMDhCRTE=",
+     fields: [
+        "password",
+        "accessToken",
+        "refreshToken",
+        "authorization",
+        "cookie",
+        "email",
+        "id"
+    ],
     },
     auth: {
       username: "godwin",
@@ -27,6 +37,10 @@ async function bootstrap() {
         role: user.role,
       };
     },
+    db: {
+      provider: SUPPORTED_DB.postgresql,
+      connectionString: "postgresql://mac@localhost:5432/articleapp_db",
+    }, 
   });
 
   // Instrumentation must start before MongoDB/Express/HTTP are loaded.

@@ -158,3 +158,54 @@ npm pack
 npm install ../server-devtool/server-devtools-0.1.0.tgz
 
 npm version patch
+
+curl -X POST http://localhost:3000/users \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+curl http://localhost:3000/users/123
+
+curl http://localhost:3000/postgres-users
+curl http://localhost:3000/postgres-select
+curl 'http://localhost:3000/postgres-select-parameterized?id=1'
+
+curl -X POST http://localhost:3000/postgres-insert \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+curl -X PATCH http://localhost:3000/postgres-update/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Updated Alice"}'
+
+curl -X DELETE http://localhost:3000/postgres-delete/1
+curl http://localhost:3000/postgres-failed
+
+curl http://localhost:3000/mysql2-users
+curl http://localhost:3000/mysql2-users/1
+
+curl -X POST http://localhost:3000/mysql2-users \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+curl -X PUT http://localhost:3000/mysql2-users/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Updated Alice","email":"alice.updated@example.com"}'
+
+curl -X DELETE http://localhost:3000/mysql2-users/1
+curl http://localhost:3000/mysql2-failed
+
+curl http://localhost:3000/redis-test/example-key
+curl http://localhost:3000/redis-failed
+
+curl http://localhost:3000/stream-test
+
+curl -X POST http://localhost:3000/external-test \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Godwin","source":"curl"}'
+
+curl http://localhost:3000/users/123
+curl http://localhost:3000/error-test
+curl http://localhost:3000/fetch-test
+curl http://localhost:3000/fetch-concurrent-test
+
+curl http://localhost:3000/_devtools

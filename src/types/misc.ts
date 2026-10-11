@@ -17,6 +17,13 @@ export interface IDevToolsCurrentUser {
     [key: string]: unknown;
 }
 
+export enum SUPPORTED_DB {
+    'postgresql' = 'postgresql',
+    'mongodb' = 'mongodb',
+    'mysql' = 'mysql', 
+    'sqlite'='sqlite'
+}
+
 export interface IServerDevlToolsParams {
     encryption?: {
         key: string,
@@ -29,4 +36,8 @@ export interface IServerDevlToolsParams {
     getCurrentUser?: (
         req: IncomingMessage,
     ) => IDevToolsCurrentUser | undefined;
+    db?: {
+        connectionString?: string,
+        provider?: SUPPORTED_DB
+    }
 }

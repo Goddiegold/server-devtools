@@ -104,3 +104,64 @@ test("close waits for an accepted PostgreSQL operation", async () => {
     Pool.prototype.end = originalEnd;
   }
 });
+
+test("serializes error span and trace summary writes with the trace advisory lock", async () => {
+  const queries: string[] = [];
+  const client = {
+    query: async (text: string) => {
+      queries.push(text);
+      if (text.includes("SELECT 1") && text.includes("error_json")) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    },
+    release: () => undefined,
+  };
+  const originalConnect = Pool.prototype.connect;
+  Pool.prototype.connect = async function () {
+    return client as never;
+  };
+
+  try {
+    const storage = new PgStorage("postgresql://localhost/serverdevtools_test");
+    await storage.saveSpan({ ...span, spanId: "error-span", error: { message: "boom" } });
+    await storage.saveTraceSummary(span);
+
+    const lockIndexes = queries
+      .map((query, index) => query.includes("pg_advisory_xact_lock") ? index : -1)
+      .filter(index => index >= 0);
+    assert.equal(lockIndexes.length, 2);
+    assert.match(queries[lockIndexes[0]], /hashtextextended\(\$1, 0\)/);
+    assert.match(queries[lockIndexes[1]], /hashtextextended\(\$1, 0\)/);
+    assert.ok(lockIndexes[0] < queries.findIndex(query => query.includes("INSERT INTO serverdevtools.spans")));
+    assert.ok(lockIndexes[1] < queries.findIndex(query => query.includes("SELECT 1") && query.includes("error_json")));
+  } finally {
+    Pool.prototype.connect = originalConnect;
+  }
+});
+
+test("filters methods by case-insensitive equality instead of a pattern", async () => {
+  let filteredQuery = "";
+  const client = {
+    query: async (text: string) => {
+      if (text.includes("COUNT(*)")) {
+        filteredQuery = text;
+      }
+      return { rows: text.includes("COUNT(*)") ? [{ total: "0" }] : [] };
+    },
+    release: () => undefined,
+  };
+  const originalConnect = Pool.prototype.connect;
+  Pool.prototype.connect = async function () {
+    return client as never;
+  };
+
+  try {
+    const storage = new PgStorage("postgresql://localhost/serverdevtools_test");
+    await storage.getPaginatedTraceSummaries(1, 10, "", "GET");
+    assert.match(filteredQuery, /LOWER\(t\.method\) = LOWER\(\$1\)/);
+    assert.doesNotMatch(filteredQuery, /t\.method ILIKE/);
+  } finally {
+    Pool.prototype.connect = originalConnect;
+  }
+});

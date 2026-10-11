@@ -31,6 +31,10 @@ export default class PgStorage implements IStorage {
     }
 
     initialize(): Promise<void> {
+        if (this.isClosing) {
+            return Promise.reject(new Error("Storage is closing"));
+        }
+
         if (!this.initializationPromise) {
             this.initializationPromise = (async () => {
                 let client: PoolClient | undefined;
@@ -216,6 +220,10 @@ export default class PgStorage implements IStorage {
     saveSpan(span: IDevToolsSpan): Promise<void> {
         return this.withClient(async client => {
             await this.transaction(client, async () => {
+                await client.query(
+                    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                    [span.traceId],
+                );
                 await client.query(`
                     INSERT INTO serverdevtools.spans (
                         span_id, trace_id, parent_span_id, type, name,
@@ -296,6 +304,10 @@ export default class PgStorage implements IStorage {
             }
 
             await this.transaction(client, async () => {
+                await client.query(
+                    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                    [span.traceId],
+                );
                 const errorResult = await client.query(`
                     SELECT 1
                     FROM serverdevtools.spans
@@ -394,7 +406,7 @@ export default class PgStorage implements IStorage {
             const normalizedMethod = method?.trim();
             if (normalizedMethod) {
                 parameters.push(normalizedMethod);
-                conditions.push(`t.method ILIKE $${parameters.length}`);
+                conditions.push(`LOWER(t.method) = LOWER($${parameters.length})`);
             }
 
             if (statusCode !== undefined) {
@@ -639,11 +651,13 @@ export default class PgStorage implements IStorage {
             let closeError: unknown;
             let hasCloseError = false;
 
-            try {
-                await this.initialize();
-            } catch (error) {
-                closeError = error;
-                hasCloseError = true;
+            if (this.initializationPromise) {
+                try {
+                    await this.initializationPromise;
+                } catch (error) {
+                    closeError = error;
+                    hasCloseError = true;
+                }
             }
 
             try {

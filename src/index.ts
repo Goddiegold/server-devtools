@@ -1,13 +1,14 @@
 import { context, trace } from "@opentelemetry/api";
 import { IncomingMessage, ServerResponse } from "node:http";
+import Config from "./config";
 import DashboardServer from "./dashboard/dashboard-server";
 import { Instrumentation } from "./instrumentation/instrumentation";
-import { IServerDevlToolsParams } from "./types";
+import AuthService from "./security/auth.service";
+import EncryptDecryptService from "./security/encrypt-decrypt.service";
+import PgStorage from "./storage/pg-storage";
 import SQLiteStorage from "./storage/sqlite-storage";
 import type { IStorage } from "./types";
-import EncryptDecryptService from "./security/encrypt-decrypt.service";
-import Config from "./config";
-import AuthService from "./security/auth.service";
+import { IServerDevlToolsParams, SUPPORTED_DB } from "./types";
 import { debugLog } from "./utils/logger";
 
 class ServerDevTools {
@@ -27,10 +28,34 @@ class ServerDevTools {
             )
             : undefined;
 
-        this.storage = new SQLiteStorage(
-            "./server-devtools.db",
-            encryptionService,
-        );
+        const db = options.db;
+
+        if (!db) {
+            this.storage = new SQLiteStorage(
+                "./server-devtools.db",
+                encryptionService,
+            );
+        } else {
+            switch (db.provider) {
+                case SUPPORTED_DB.postgresql:
+                    if (!db.connectionString?.trim()) {
+                        throw new Error(
+                            "PostgreSQL storage requires a connectionString",
+                        );
+                    }
+
+                    this.storage = new PgStorage(
+                        db.connectionString,
+                        encryptionService,
+                    );
+                    break;
+
+                default:
+                    throw new Error(
+                        `Unsupported storage provider: ${db.provider}`,
+                    );
+            }
+        }
 
         const auth = options.auth || {}
 

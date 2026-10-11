@@ -88,3 +88,46 @@ test("rolls back and releases the client when schema initialization fails", asyn
     Pool.prototype.connect = originalConnect;
   }
 });
+
+test("closing unused storage does not initialize PostgreSQL", async () => {
+  let connectCalls = 0;
+  let endCalls = 0;
+  const originalConnect = Pool.prototype.connect;
+  const originalEnd = Pool.prototype.end;
+  Pool.prototype.connect = async function () {
+    connectCalls += 1;
+    throw new Error("unexpected connection");
+  };
+  Pool.prototype.end = async function () {
+    endCalls += 1;
+  };
+
+  try {
+    const storage = new PgStorage("postgresql://localhost/serverdevtools_test");
+    await storage.close();
+    assert.equal(connectCalls, 0);
+    assert.equal(endCalls, 1);
+  } finally {
+    Pool.prototype.connect = originalConnect;
+    Pool.prototype.end = originalEnd;
+  }
+});
+
+test("rejects initialization and operations after closing begins", async () => {
+  let endCalls = 0;
+  const originalEnd = Pool.prototype.end;
+  Pool.prototype.end = async function () {
+    endCalls += 1;
+  };
+
+  try {
+    const storage = new PgStorage("postgresql://localhost/serverdevtools_test");
+    const close = storage.close();
+    await assert.rejects(storage.initialize(), /Storage is closing/);
+    await assert.rejects(storage.getTraceSummaries(), /Storage is closing/);
+    await close;
+    assert.equal(endCalls, 1);
+  } finally {
+    Pool.prototype.end = originalEnd;
+  }
+});
