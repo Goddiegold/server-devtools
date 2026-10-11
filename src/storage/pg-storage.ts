@@ -253,7 +253,8 @@ export default class PgStorage implements IStorage {
                     span.error ? JSON.stringify(span.error) : null,
                 ]);
 
-                if (span.error) {
+    
+                if (span.status.code === 2 || span.error !== undefined) {
                     await client.query(`
                         UPDATE serverdevtools.traces
                         SET has_error = 1
@@ -311,7 +312,11 @@ export default class PgStorage implements IStorage {
                 const errorResult = await client.query(`
                     SELECT 1
                     FROM serverdevtools.spans
-                    WHERE trace_id = $1 AND error_json IS NOT NULL
+                    WHERE trace_id = $1
+                      AND (
+                          status_json::jsonb ->> 'code' = '2'
+                          OR error_json IS NOT NULL
+                      )
                     LIMIT 1
                 `, [span.traceId]);
                 const hasError = errorResult.rows.length > 0 ? 1 : 0;

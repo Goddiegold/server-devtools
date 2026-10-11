@@ -180,7 +180,7 @@ export default class SQLiteStorage implements IStorage {
 
     saveSpan(span: IDevToolsSpan): Promise<void> {
         return this.trackWrite(() => {
-        const statement = this.db.prepare(`
+            const statement = this.db.prepare(`
         INSERT OR REPLACE INTO spans (
             span_id,
             trace_id,
@@ -196,30 +196,30 @@ export default class SQLiteStorage implements IStorage {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-        statement.run(
-            span.spanId,
-            span.traceId,
-            span.parentSpanId ?? null,
-            span.type,
-            span.name,
-            span.startedAt,
-            span.durationMs,
-            JSON.stringify(span.attributes),
-            JSON.stringify(span.status),
-            span.error
-                ? JSON.stringify(span.error)
-                : null,
-        );
+            statement.run(
+                span.spanId,
+                span.traceId,
+                span.parentSpanId ?? null,
+                span.type,
+                span.name,
+                span.startedAt,
+                span.durationMs,
+                JSON.stringify(span.attributes),
+                JSON.stringify(span.status),
+                span.error
+                    ? JSON.stringify(span.error)
+                    : null,
+            );
 
-        // Handles the case where the trace summary already exists
-        // when an errored child span arrives.
-        if (span.error) {
-            this.db.prepare(`
+            // Handles the case where the trace summary already exists
+            // when an errored child span arrives.
+            if (span.status.code === 2 || span.error !== undefined) {
+                this.db.prepare(`
             UPDATE traces
             SET has_error = 1
             WHERE trace_id = ?
         `).run(span.traceId);
-        }
+            }
         });
     }
 
@@ -284,42 +284,45 @@ export default class SQLiteStorage implements IStorage {
 
     saveTraceSummary(span: IDevToolsSpan): Promise<void> {
         return this.trackWrite(() => {
-        if (span.parentSpanId) {
-            return;
-        }
+            if (span.parentSpanId) {
+                return;
+            }
 
-        const method =
-            typeof span.attributes["http.request.method"] === "string"
-                ? span.attributes["http.request.method"]
-                : null;
+            const method =
+                typeof span.attributes["http.request.method"] === "string"
+                    ? span.attributes["http.request.method"]
+                    : null;
 
-        const path =
-            typeof span.attributes["url.path"] === "string"
-                ? span.attributes["url.path"]
-                : null;
+            const path =
+                typeof span.attributes["url.path"] === "string"
+                    ? span.attributes["url.path"]
+                    : null;
 
-        const statusCode =
-            typeof span.attributes["http.response.status_code"] === "number"
-                ? span.attributes["http.response.status_code"]
-                : null;
+            const statusCode =
+                typeof span.attributes["http.response.status_code"] === "number"
+                    ? span.attributes["http.response.status_code"]
+                    : null;
 
-        const route =
-            typeof span.attributes["http.route"] === "string"
-                ? span.attributes["http.route"]
-                : null;
+            const route =
+                typeof span.attributes["http.route"] === "string"
+                    ? span.attributes["http.route"]
+                    : null;
 
-        // The error may exist on a child span rather than the root HTTP span.
-        const errorSpan = this.db.prepare(`
+            // The error may exist on a child span rather than the root HTTP span.
+            const errorSpan = this.db.prepare(`
         SELECT 1
         FROM spans
         WHERE trace_id = ?
-          AND error_json IS NOT NULL
+          AND (
+              json_extract(status_json, '$.code') = 2
+              OR error_json IS NOT NULL
+          )
         LIMIT 1
     `).get(span.traceId);
 
-        const hasError = errorSpan ? 1 : 0;
+            const hasError = errorSpan ? 1 : 0;
 
-        const statement = this.db.prepare(`
+            const statement = this.db.prepare(`
         INSERT INTO traces (
             trace_id,
             root_span_id,
@@ -350,18 +353,18 @@ export default class SQLiteStorage implements IStorage {
             END
     `);
 
-        statement.run(
-            span.traceId,
-            span.spanId,
-            span.startedAt,
-            span.durationMs,
-            method,
-            path,
-            route,
-            statusCode,
-            hasError,
-            Date.now(),
-        );
+            statement.run(
+                span.traceId,
+                span.spanId,
+                span.startedAt,
+                span.durationMs,
+                method,
+                path,
+                route,
+                statusCode,
+                hasError,
+                Date.now(),
+            );
         });
     }
 
@@ -497,7 +500,7 @@ export default class SQLiteStorage implements IStorage {
 
     saveRequestBody(traceId: string, body: unknown): Promise<void> {
         return this.trackWrite(() => {
-        const statement = this.db.prepare(`
+            const statement = this.db.prepare(`
         INSERT INTO trace_metadata (
             trace_id,
             request_body
@@ -507,20 +510,20 @@ export default class SQLiteStorage implements IStorage {
             request_body = excluded.request_body
     `);
 
-        const data = this.encryptionService
-            ? this.encryptionService.encryptData(body)
-            : body;
+            const data = this.encryptionService
+                ? this.encryptionService.encryptData(body)
+                : body;
 
-        statement.run(
-            traceId,
-            JSON.stringify(data),
-        );
+            statement.run(
+                traceId,
+                JSON.stringify(data),
+            );
         });
     }
 
     saveResponseBody(traceId: string, body: unknown): Promise<void> {
         return this.trackWrite(() => {
-        const statement = this.db.prepare(`
+            const statement = this.db.prepare(`
         INSERT INTO trace_metadata (
             trace_id,
             response_body
@@ -530,14 +533,14 @@ export default class SQLiteStorage implements IStorage {
             response_body = excluded.response_body
     `);
 
-        const data = this.encryptionService
-            ? this.encryptionService.encryptData(body)
-            : body;
+            const data = this.encryptionService
+                ? this.encryptionService.encryptData(body)
+                : body;
 
-        statement.run(
-            traceId,
-            JSON.stringify(data),
-        );
+            statement.run(
+                traceId,
+                JSON.stringify(data),
+            );
         });
     }
 
@@ -600,60 +603,60 @@ export default class SQLiteStorage implements IStorage {
 
     deleteTrace(traceId: string): Promise<void> {
         return this.trackWrite(() => {
-        this.db.exec("BEGIN");
+            this.db.exec("BEGIN");
 
-        try {
-            this.db.prepare(`
+            try {
+                this.db.prepare(`
             DELETE FROM trace_metadata
             WHERE trace_id = ?
         `).run(traceId);
 
-            this.db.prepare(`
+                this.db.prepare(`
             DELETE FROM http_client_details
             WHERE span_id IN (SELECT span_id FROM spans WHERE trace_id = ?)
         `).run(traceId);
 
-            this.db.prepare(`
+                this.db.prepare(`
             DELETE FROM spans
             WHERE trace_id = ?
         `).run(traceId);
 
-            this.db.prepare(`
+                this.db.prepare(`
             DELETE FROM traces
             WHERE trace_id = ?
         `).run(traceId);
 
-            this.db.exec("COMMIT");
-        } catch (error) {
-            this.db.exec("ROLLBACK");
-            throw error;
-        }
+                this.db.exec("COMMIT");
+            } catch (error) {
+                this.db.exec("ROLLBACK");
+                throw error;
+            }
         });
     }
 
     clearHistory(): Promise<void> {
         return this.trackWrite(() => {
-        this.db.exec("BEGIN");
+            this.db.exec("BEGIN");
 
-        try {
-            this.db.exec(`
+            try {
+                this.db.exec(`
             DELETE FROM trace_metadata;
             DELETE FROM spans;
             DELETE FROM traces;
             DELETE FROM http_client_details;
         `);
 
-            this.db.exec("COMMIT");
-        } catch (error) {
-            this.db.exec("ROLLBACK");
-            throw error;
-        }
+                this.db.exec("COMMIT");
+            } catch (error) {
+                this.db.exec("ROLLBACK");
+                throw error;
+            }
         });
     }
 
     saveSession(session: ISession): Promise<void> {
         return this.trackWrite(() => {
-        this.db.prepare(`
+            this.db.prepare(`
         INSERT INTO sessions (
             session_hash,
             username,
@@ -662,11 +665,11 @@ export default class SQLiteStorage implements IStorage {
         )
         VALUES (?, ?, ?, ?)
     `).run(
-            session.sessionHash,
-            session.username,
-            session.createdAt,
-            session.expiresAt,
-        );
+                session.sessionHash,
+                session.username,
+                session.createdAt,
+                session.expiresAt,
+            );
         });
     }
 
@@ -694,7 +697,7 @@ export default class SQLiteStorage implements IStorage {
 
     deleteSession(sessionHash: string): Promise<void> {
         return this.trackWrite(() => {
-        this.db.prepare(`
+            this.db.prepare(`
             DELETE FROM sessions
             WHERE session_hash = ?
         `).run(sessionHash);
@@ -706,13 +709,13 @@ export default class SQLiteStorage implements IStorage {
         user: IDevToolsCurrentUser,
     ): Promise<void> {
         return this.trackWrite(() => {
-        const processedUser = this.encryptionService
-            ? this.encryptionService.encryptData(user)
-            : user;
+            const processedUser = this.encryptionService
+                ? this.encryptionService.encryptData(user)
+                : user;
 
-        const userJson = JSON.stringify(processedUser);
+            const userJson = JSON.stringify(processedUser);
 
-        this.db.prepare(`
+            this.db.prepare(`
         INSERT INTO trace_metadata (
             trace_id,
             user_json
@@ -729,75 +732,75 @@ export default class SQLiteStorage implements IStorage {
         details: Partial<Omit<IHttpClientDetails, "spanId">>,
     ): Promise<void> {
         return this.trackWrite(() => {
-        const fields: string[] = [];
-        const values: (string | null)[] = [];
+            const fields: string[] = [];
+            const values: (string | null)[] = [];
 
-        if (Object.prototype.hasOwnProperty.call(details, "requestHeaders")) {
-            fields.push("request_headers = ?");
-            values.push(
-                details.requestHeaders === undefined
-                    ? null
-                    : this.serializeSensitiveValue(details.requestHeaders),
-            );
-        }
+            if (Object.prototype.hasOwnProperty.call(details, "requestHeaders")) {
+                fields.push("request_headers = ?");
+                values.push(
+                    details.requestHeaders === undefined
+                        ? null
+                        : this.serializeSensitiveValue(details.requestHeaders),
+                );
+            }
 
-        if (Object.prototype.hasOwnProperty.call(details, "requestBody")) {
-            fields.push("request_body = ?");
-            values.push(
-                details.requestBody === undefined
-                    ? null
-                    : this.serializeSensitiveValue(details.requestBody),
-            );
-        }
+            if (Object.prototype.hasOwnProperty.call(details, "requestBody")) {
+                fields.push("request_body = ?");
+                values.push(
+                    details.requestBody === undefined
+                        ? null
+                        : this.serializeSensitiveValue(details.requestBody),
+                );
+            }
 
-        if (Object.prototype.hasOwnProperty.call(details, "responseHeaders")) {
-            fields.push("response_headers = ?");
-            values.push(
-                details.responseHeaders === undefined
-                    ? null
-                    : this.serializeSensitiveValue(details.responseHeaders),
-            );
-        }
+            if (Object.prototype.hasOwnProperty.call(details, "responseHeaders")) {
+                fields.push("response_headers = ?");
+                values.push(
+                    details.responseHeaders === undefined
+                        ? null
+                        : this.serializeSensitiveValue(details.responseHeaders),
+                );
+            }
 
-        if (Object.prototype.hasOwnProperty.call(details, "responseBody")) {
-            fields.push("response_body = ?");
-            values.push(
-                details.responseBody === undefined
-                    ? null
-                    : this.serializeSensitiveValue(details.responseBody),
-            );
-        }
+            if (Object.prototype.hasOwnProperty.call(details, "responseBody")) {
+                fields.push("response_body = ?");
+                values.push(
+                    details.responseBody === undefined
+                        ? null
+                        : this.serializeSensitiveValue(details.responseBody),
+                );
+            }
 
-        if (fields.length === 0) {
-            return;
-        }
+            if (fields.length === 0) {
+                return;
+            }
 
-        const existing = this.db
-            .prepare(`
+            const existing = this.db
+                .prepare(`
       SELECT span_id
       FROM http_client_details
       WHERE span_id = ?
     `)
-            .get(spanId);
+                .get(spanId);
 
-        if (!existing) {
-            this.db
-                .prepare(`
+            if (!existing) {
+                this.db
+                    .prepare(`
         INSERT INTO http_client_details (span_id)
         VALUES (?)
       `)
-                .run(spanId);
-        }
+                    .run(spanId);
+            }
 
-        values.push(spanId);
+            values.push(spanId);
 
-        this.db
-            .prepare(`
+            this.db
+                .prepare(`
       UPDATE http_client_details
       SET ${fields.join(", ")}
       WHERE span_id = ?
     `)
-            .run(...values);
+                .run(...values);
         });
     }
 
