@@ -179,7 +179,7 @@ export default class SQLiteStorage {
 
         // Handles the case where the trace summary already exists
         // when an errored child span arrives.
-        if (span.error) {
+        if (span.status.code === 2 || span.error !== undefined) {
             this.db.prepare(`
             UPDATE traces
             SET has_error = 1
@@ -276,7 +276,10 @@ export default class SQLiteStorage {
         SELECT 1
         FROM spans
         WHERE trace_id = ?
-          AND error_json IS NOT NULL
+          AND (
+              json_extract(status_json, '$.code') = 2
+              OR error_json IS NOT NULL
+          )
         LIMIT 1
     `).get(span.traceId);
 
