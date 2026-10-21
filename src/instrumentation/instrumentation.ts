@@ -14,6 +14,7 @@ import { MySQL2Instrumentation } from "@opentelemetry/instrumentation-mysql2";
 import { IORedisInstrumentation } from "@opentelemetry/instrumentation-ioredis";
 import { register } from "node:module";
 import { pathToFileURL } from "node:url";
+import { HonoNodeServerInstrumentation } from "./hono-node-server";
 
 const esmHookRegistered = Symbol.for("server-devtools.opentelemetry.esm-hook-registered");
 const processState = process as typeof process & { [esmHookRegistered]?: boolean };
@@ -141,6 +142,7 @@ export class Instrumentation {
 
                     },
                 }),
+                new HonoNodeServerInstrumentation(),
                 new MongoDBInstrumentation({
                     enhancedDatabaseReporting: false,
                 }),

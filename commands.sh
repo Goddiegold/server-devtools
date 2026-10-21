@@ -153,6 +153,19 @@ curl http://localhost:4000/redis/expired
 curl http://localhost:4000/redis/failed
 curl http://localhost:4000/redis/wrong-type
 
+
+node --import tsx \
+  --import ./examples/hono/server-devtools.ts \
+  ./examples/hono/server.ts
+
+curl http://127.0.0.1:3000/hello
+# {"message":"hello"}
+
+curl -X POST http://127.0.0.1:3000/echo \
+  -H 'content-type: application/json' \
+  --data '{"name":"Ada","ok":true}'
+# {"name":"Ada","ok":true}
+
 npm run build
 npm pack
 npm install ../server-devtool/server-devtools-0.1.0.tgz
