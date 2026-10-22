@@ -18,6 +18,26 @@ export interface IDashboardRequest {
   hasError: boolean;
 }
 
+export type DashboardOverviewRange = "15m" | "1h" | "6h" | "24h";
+
+export interface IOverviewVolumeBucket {
+  startAt: number;
+  endAt: number;
+  count: number;
+}
+
+export interface IOverviewMetrics {
+  range: DashboardOverviewRange;
+  from: number;
+  to: number;
+  totalRequests: number;
+  errorRate: number;
+  averageLatencyMs: number;
+  slowRequests: number;
+  volume: IOverviewVolumeBucket[];
+  recentFailures: IDashboardRequest[];
+}
+
 export interface IDevToolsResponse {
   statusCode?: number;
   headers: Record<string, string | string[]>;

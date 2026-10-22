@@ -102,6 +102,11 @@ async function run() {
       assert.match(await dashboardResponse.text(), /<html/i);
     }
 
+    const requestsPageResponse = await staticFetch('/_devtools/requests');
+    assert.equal(requestsPageResponse.status, 200);
+    assert.match(requestsPageResponse.headers.get('content-type') ?? '', /text\/html/);
+    assert.match(await requestsPageResponse.text(), /<html/i);
+
     const faviconResponse = await staticFetch('/_devtools/favicon.svg');
     assert.equal(faviconResponse.status, 200);
     assert.match(faviconResponse.headers.get('content-type') ?? '', /image\/svg\+xml/);
@@ -114,6 +119,29 @@ async function run() {
 
     const unauthenticatedApiResponse = await fetch(`http://127.0.0.1:${address.port}/_devtools/api/requests`);
     assert.equal(unauthenticatedApiResponse.status, 401);
+
+    const unauthenticatedOverviewResponse = await fetch(`http://127.0.0.1:${address.port}/_devtools/api/overview`);
+    assert.equal(unauthenticatedOverviewResponse.status, 401);
+
+    const overviewResponse = await apiFetch('/_devtools/api/overview');
+    assert.equal(overviewResponse.status, 200);
+    const overviewBody = await overviewResponse.json();
+    assert.equal(overviewBody.range, '1h');
+    assert.equal(typeof overviewBody.from, 'number');
+    assert.equal(typeof overviewBody.to, 'number');
+    assert.equal(overviewBody.totalRequests, 0);
+    assert.equal(overviewBody.errorRate, 0);
+    assert.equal(overviewBody.averageLatencyMs, 0);
+    assert.equal(overviewBody.slowRequests, 0);
+    assert.ok(Array.isArray(overviewBody.volume));
+    assert.deepEqual(overviewBody.recentFailures, []);
+
+    const customOverviewResponse = await apiFetch('/_devtools/api/overview?range=15m');
+    assert.equal(customOverviewResponse.status, 200);
+    assert.equal((await customOverviewResponse.json()).range, '15m');
+
+    const invalidOverviewResponse = await apiFetch('/_devtools/api/overview?range=2h');
+    assert.equal(invalidOverviewResponse.status, 400);
 
     // 4. Call the NEW endpoint we want to build
     const response = await apiFetch('/_devtools/api/requests');

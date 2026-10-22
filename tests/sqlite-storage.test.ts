@@ -264,6 +264,121 @@ storage.saveTraceSummary(postClearTrace);
 assert.equal(storage.getTrace("trace-after-clear")?.traceId, "trace-after-clear");
 assert.equal(storage.getTraceSummaries().length, 1);
 
+// Overview aggregation uses one canonical trace row per incoming request,
+// ignores the exclusive upper boundary, and safely handles incomplete rows.
+const overviewStorage = new SQLiteStorage(":memory:");
+const overviewNow = 100_000;
+const overviewFrom = overviewNow - 60 * 60 * 1000;
+
+function saveOverviewTrace(input: {
+    traceId: string;
+    startedAt: number;
+    durationMs?: number;
+    statusCode?: number;
+    child?: boolean;
+}): void {
+    const root: IDevToolsSpan = {
+        traceId: input.traceId,
+        spanId: `${input.traceId}-root`,
+        type: "http.server",
+        name: "GET /overview",
+        startedAt: input.startedAt,
+        durationMs: input.durationMs ?? 1,
+        attributes: {
+            "http.request.method": "GET",
+            "url.path": "/overview",
+            ...(input.statusCode === undefined
+                ? {}
+                : { "http.response.status_code": input.statusCode }),
+        },
+        status: { code: 0 },
+    };
+
+    overviewStorage.saveSpan(root);
+    if (input.child) {
+        overviewStorage.saveSpan({
+            traceId: input.traceId,
+            spanId: `${input.traceId}-child`,
+            parentSpanId: root.spanId,
+            type: "database",
+            name: "query",
+            startedAt: input.startedAt + 1,
+            durationMs: 50,
+            attributes: {},
+            status: { code: 0 },
+        });
+    }
+    overviewStorage.saveTraceSummary(root);
+    if (input.durationMs === undefined) {
+        (overviewStorage as unknown as { db: DatabaseSync }).db
+            .prepare("UPDATE traces SET duration_ms = NULL WHERE trace_id = ?")
+            .run(input.traceId);
+    }
+}
+
+saveOverviewTrace({
+    traceId: "overview-boundary-start",
+    startedAt: overviewFrom,
+    durationMs: 99,
+    statusCode: 500,
+});
+saveOverviewTrace({
+    traceId: "overview-success",
+    startedAt: overviewFrom + 1,
+    durationMs: 100,
+    statusCode: 200,
+    child: true,
+});
+saveOverviewTrace({
+    traceId: "overview-failure",
+    startedAt: overviewFrom + 10,
+    durationMs: 501,
+    statusCode: 503,
+});
+saveOverviewTrace({
+    traceId: "overview-missing-duration",
+    startedAt: overviewFrom + 20,
+    statusCode: 200,
+});
+saveOverviewTrace({
+    traceId: "overview-boundary-end",
+    startedAt: overviewNow,
+    durationMs: 1,
+    statusCode: 500,
+});
+
+const overview = overviewStorage.getOverview("1h", overviewNow);
+assert.equal(overview.totalRequests, 4);
+assert.equal(overview.errorRate, 2 / 4);
+assert.equal(overview.averageLatencyMs, 700 / 3);
+assert.equal(overview.slowRequests, 1);
+assert.equal(overview.volume.reduce((sum, bucket) => sum + bucket.count, 0), 4);
+assert.equal(overview.volume.every((bucket) => bucket.startAt < bucket.endAt), true);
+assert.equal(overview.volume.some((bucket) => bucket.count === 0), true);
+assert.deepEqual(
+    overview.recentFailures.map((failure) => failure.id),
+    ["overview-failure", "overview-boundary-start"],
+);
+
+const emptyOverview = overviewStorage.getOverview("15m", 0);
+assert.equal(emptyOverview.totalRequests, 0);
+assert.equal(emptyOverview.errorRate, 0);
+assert.equal(emptyOverview.averageLatencyMs, 0);
+assert.equal(emptyOverview.slowRequests, 0);
+assert.equal(emptyOverview.recentFailures.length, 0);
+assert.equal(emptyOverview.volume.reduce((sum, bucket) => sum + bucket.count, 0), 0);
+
+for (const range of ["15m", "1h", "6h", "24h"] as const) {
+    const rangeOverview = overviewStorage.getOverview(range, overviewNow);
+    assert.equal(
+        rangeOverview.volume.reduce((sum, bucket) => sum + bucket.count, 0),
+        rangeOverview.totalRequests,
+    );
+    assert.equal(rangeOverview.from < rangeOverview.to, true);
+}
+
+overviewStorage.close();
+
 storage.close();
 
 /**

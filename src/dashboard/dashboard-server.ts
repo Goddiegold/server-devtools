@@ -708,6 +708,40 @@ export default class DashboardServer {
 
         if (
             req.method === Config.REQUEST_METHOD.GET &&
+            pathname === Config.DASHBOARD_API_ROUTES.OVERVIEW
+        ) {
+            res.setHeader("Cache-Control", "no-store");
+            const searchParams = new URL(requestUrl, "http://localhost").searchParams;
+            const requestedRange = searchParams.get("range") ?? "1h";
+            const validRanges = ["15m", "1h", "6h", "24h"] as const;
+
+            if (!(validRanges as readonly string[]).includes(requestedRange)) {
+                res.statusCode = 400;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Range must be one of 15m, 1h, 6h, or 24h",
+                }));
+                return;
+            }
+
+            try {
+                const overview = this.storage.getOverview(requestedRange as typeof validRanges[number]);
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify(overview));
+            } catch (error) {
+                debugLog("Overview lookup failed", {
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read overview" }));
+            }
+            return;
+        }
+
+        if (
+            req.method === Config.REQUEST_METHOD.GET &&
             pathname === Config.DASHBOARD_API_ROUTES.REQUESTS) {
             const searchParams = new URL(requestUrl, "http://localhost").searchParams;
             const parsePositiveInteger = (name: string, fallback: number) => {
@@ -834,6 +868,17 @@ export default class DashboardServer {
                 res.end(content);
                 return;
             } catch {
+                if (path.extname(relativePath) === "") {
+                    try {
+                        const content = readFileSync(path.join(dashboardDirectory, "index.html"));
+                        res.statusCode = 200;
+                        res.setHeader("Content-Type", contentTypes[".html"]);
+                        res.end(content);
+                        return;
+                    } catch {
+                        // Fall through to the normal 404 response.
+                    }
+                }
                 res.statusCode = 404;
                 res.end("Not Found");
                 return;

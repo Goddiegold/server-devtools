@@ -9,9 +9,10 @@ import logoUrl from "../../../assets/logo/serverdevtools-icon.svg"
 
 interface DashboardHeaderProps {
   onLogout: () => void
+  onNavigate: (path: string) => void
 }
 
-export function DashboardHeader({ onLogout }: DashboardHeaderProps) {
+export function DashboardHeader({ onLogout, onNavigate }: DashboardHeaderProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -39,10 +40,21 @@ export function DashboardHeader({ onLogout }: DashboardHeaderProps) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-6">
-      <div className="flex items-center gap-2 font-semibold"><img className="size-7" src={logoUrl} alt="" />ServerDevTools</div>
+    <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b px-4 py-2 sm:px-6">
+      <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-5">
+        <button
+          className="flex items-center gap-2 font-semibold"
+          onClick={() => onNavigate("/_devtools")}
+        >
+          <img className="size-7" src={logoUrl} alt="" />ServerDevTools
+        </button>
+        <nav className="flex items-center gap-1 text-sm" aria-label="Dashboard">
+          <button className="rounded px-2 py-1 hover:bg-muted" onClick={() => onNavigate("/_devtools")}>Overview</button>
+          <button className="rounded px-2 py-1 hover:bg-muted" onClick={() => onNavigate("/_devtools/requests")}>Requests</button>
+        </nav>
+      </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
         {error && (
           <span className="text-xs text-destructive" role="alert">
             {error}
