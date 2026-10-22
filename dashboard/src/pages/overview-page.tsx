@@ -215,7 +215,7 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
               {metrics.recentFailures.length === 0 ? (
                 <div className="flex min-h-0 flex-1 items-center justify-center text-center text-sm text-muted-foreground">No failures in this time range.</div>
               ) : (
-                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-2 pr-2">
                   {metrics.recentFailures.map((failure) => (
                     <button
                       key={failure.id}
