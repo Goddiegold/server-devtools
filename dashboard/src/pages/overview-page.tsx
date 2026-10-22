@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Activity, AlertCircle, Clock3, Gauge, Loader2, RefreshCw } from "lucide-react"
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 import { getOverview } from "@/api/overview"
 import { Badge } from "@/components/ui/badge"
@@ -39,78 +48,62 @@ function formatChartTime(timestamp: number, range: DashboardOverviewRange): stri
 }
 
 function VolumeChart({ metrics }: { metrics: IOverviewMetrics }) {
-  const chart = { width: 600, height: 210, left: 48, right: 16, top: 14, bottom: 34 }
-  const plotWidth = chart.width - chart.left - chart.right
-  const plotHeight = chart.height - chart.top - chart.bottom
-  const maxCount = Math.max(...metrics.volume.map((bucket) => bucket.count), 0)
-  const yStep = Math.max(1, Math.ceil(maxCount / 4))
-  const yMax = yStep * 4
-  const bucketWidth = plotWidth / Math.max(metrics.volume.length, 1)
-  const points = metrics.volume.map((bucket, index) => {
-    const x = chart.left + (index + 0.5) * bucketWidth
-    const y = chart.top + plotHeight - (bucket.count / yMax) * plotHeight
-    return `${x},${y}`
-  })
-  const line = points.join(" ")
-  const area = points.length > 0
-    ? `${chart.left},${chart.top + plotHeight} ${line} ${chart.width - chart.right},${chart.top + plotHeight}`
-    : `${chart.left},${chart.top + plotHeight} ${chart.width - chart.right},${chart.top + plotHeight}`
-  const yTicks = Array.from({ length: 5 }, (_, index) => index * yStep)
-  const xTickCount = Math.min(metrics.volume.length, 6)
-  const xTickIndices = Array.from({ length: xTickCount }, (_, index) =>
-    Math.round(index * (metrics.volume.length - 1) / Math.max(xTickCount - 1, 1))
-  )
+  const data = metrics.volume.map((bucket) => ({
+    ...bucket,
+    label: formatChartTime(bucket.startAt, metrics.range),
+  }))
 
   return (
-    <div className="h-full w-full">
-      <svg className="h-[calc(100%-22px)] w-full overflow-visible" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img" aria-label="Request volume over time">
-        <defs>
-          <linearGradient id="overview-volume-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {yTicks.map((tick) => {
-          const y = chart.top + plotHeight - (tick / yMax) * plotHeight
-          return (
-            <g key={tick}>
-              <line x1={chart.left} x2={chart.width - chart.right} y1={y} y2={y} className="stroke-border/60" />
-              <text x={chart.left - 8} y={y + 4} textAnchor="end" className="fill-muted-foreground text-[11px]">{tick}</text>
-            </g>
-          )
-        })}
-        <polygon points={area} className="fill-[url(#overview-volume-fill)] text-primary" />
-        <polyline points={line} fill="none" stroke="currentColor" strokeWidth="3" vectorEffect="non-scaling-stroke" className="text-primary" />
-        {metrics.volume.map((bucket, index) => {
-          const x = chart.left + index * bucketWidth
-          const centerX = x + bucketWidth / 2
-          const y = chart.top + plotHeight - (bucket.count / yMax) * plotHeight
-          return (
-            <g key={bucket.startAt}>
-              <rect
-                x={x}
-                y={chart.top}
-                width={bucketWidth}
-                height={plotHeight}
-                fill="transparent"
-                aria-label={`${formatChartTime(bucket.startAt, metrics.range)}, ${bucket.count} requests`}
-              >
-                <title>{`${formatChartTime(bucket.startAt, metrics.range)} – ${formatChartTime(bucket.endAt, metrics.range)}: ${bucket.count} request${bucket.count === 1 ? "" : "s"}`}</title>
-              </rect>
-              <circle cx={centerX} cy={y} r="3" className="fill-primary" />
-            </g>
-          )
-        })}
-        {xTickIndices.map((index) => {
-          const bucket = metrics.volume[index]
-          const x = chart.left + (index + 0.5) * bucketWidth
-          return (
-            <text key={bucket.startAt} x={x} y={chart.height - 8} textAnchor="middle" className="fill-muted-foreground text-[11px]">
-              {formatChartTime(bucket.startAt, metrics.range)}
-            </text>
-          )
-        })}
-      </svg>
+    <div className="h-full min-w-0 w-full" role="img" aria-label="Request volume over time">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <AreaChart data={data} margin={{ top: 10, right: 12, left: 4, bottom: 8 }}>
+          <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} strokeDasharray="3 3" />
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            tickMargin={10}
+            minTickGap={28}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            allowDecimals={false}
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            width={32}
+            domain={[0, "auto"]}
+          />
+          <Tooltip
+            cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }}
+            labelFormatter={(_label, payload) => {
+              const bucket = payload[0]?.payload as typeof data[number] | undefined
+              return bucket
+                ? `${formatChartTime(bucket.startAt, metrics.range)} – ${formatChartTime(bucket.endAt, metrics.range)}`
+                : "Request volume"
+            }}
+            formatter={(value) => [`${value} request${value === 1 ? "" : "s"}`, "Volume"]}
+            contentStyle={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "0.5rem",
+              color: "var(--card-foreground)",
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="count"
+            name="Volume"
+            stroke="var(--primary)"
+            fill="var(--primary)"
+            fillOpacity={0.18}
+            strokeWidth={2}
+            activeDot={{ r: 4, strokeWidth: 0 }}
+            dot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   )
 }
@@ -201,7 +194,7 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-            <section className="flex h-[300px] min-h-[280px] flex-col rounded-lg border bg-card p-5">
+            <section className="flex h-80 min-h-75 min-w-0 flex-col rounded-lg border bg-card p-5 sm:h-90 lg:h-100">
               <div className="mb-4 flex items-start justify-between">
                 <div>
                   <h2 className="font-semibold">Request Volume</h2>
@@ -214,7 +207,7 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
               ) : <div className="min-h-0 flex-1"><VolumeChart metrics={metrics} /></div>}
             </section>
 
-            <section className="flex h-[300px] min-h-[280px] flex-col rounded-lg border bg-card p-5">
+            <section className="flex h-80 min-h-75 min-w-0 flex-col rounded-lg border bg-card p-5 sm:h-90 lg:h-100">
               <div className="mb-4">
                 <h2 className="font-semibold">Recent Failures</h2>
                 <p className="mt-1 text-sm text-muted-foreground">Latest HTTP 5xx requests</p>
