@@ -394,7 +394,8 @@ export default class SQLiteStorage {
         const normalizedSearch = search.trim();
         if (normalizedSearch) {
             conditions.push(`(
-                t.path LIKE ? COLLATE NOCASE ESCAPE '\\'
+                t.trace_id LIKE ? COLLATE NOCASE ESCAPE '\\'
+                OR t.path LIKE ? COLLATE NOCASE ESCAPE '\\'
                 OR t.route LIKE ? COLLATE NOCASE ESCAPE '\\'
                 OR EXISTS (
                     SELECT 1
@@ -403,10 +404,18 @@ export default class SQLiteStorage {
                       AND s.span_id = t.root_span_id
                       AND s.name LIKE ? COLLATE NOCASE ESCAPE '\\'
                 )
+                OR EXISTS (
+                    SELECT 1
+                    FROM spans s
+                    WHERE s.trace_id = t.trace_id
+                      AND s.span_id = t.root_span_id
+                      AND json_extract(s.attributes_json, '$."url.query"')
+                          LIKE ? COLLATE NOCASE ESCAPE '\\'
+                )
             )`);
             const escapedSearch = normalizedSearch.replace(/[\\%_]/g, character => `\\${character}`);
             const searchPattern = `%${escapedSearch}%`;
-            parameters.push(searchPattern, searchPattern, searchPattern);
+            parameters.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
         }
 
         const normalizedMethod = method?.trim();

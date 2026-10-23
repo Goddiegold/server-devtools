@@ -267,6 +267,43 @@ async function run() {
     const invalidSortResponse = await apiFetch('/_devtools/api/requests?sortBy=createdAt&sortDirection=asc');
     assert.equal(invalidSortResponse.status, 400);
 
+    const querySearchTrace: IDevToolsTrace = {
+      traceId: 'trace-query-search',
+      rootSpanId: 'root-query-search',
+      startedAt: 1500,
+      durationMs: 12,
+      spans: [{
+        traceId: 'trace-query-search',
+        spanId: 'root-query-search',
+        type: 'http.server',
+        name: 'GET /users',
+        startedAt: 1500,
+        durationMs: 12,
+        attributes: {
+          'http.request.method': 'GET',
+          'url.path': '/users',
+          'http.route': '/users',
+          'url.query': 'name=Ada&marker=100%_done',
+          'http.response.status_code': 200,
+        },
+        status: { code: 0 },
+      }],
+    };
+    storage.saveSpan(querySearchTrace.spans[0]);
+    storage.saveTraceSummary(querySearchTrace.spans[0]);
+
+    const querySearchResponse = await apiFetch('/_devtools/api/requests?search=name%3DAda');
+    assert.equal(querySearchResponse.status, 200);
+    const querySearchBody = await querySearchResponse.json();
+    assert.deepEqual(querySearchBody.data.map((request: { id: string }) => request.id), ['trace-query-search']);
+    assert.equal(querySearchBody.pagination.total, 1);
+
+    const combinedQuerySearchResponse = await apiFetch('/_devtools/api/requests?search=Ada&method=GET&status=200&from=1000&to=2000');
+    assert.equal(combinedQuerySearchResponse.status, 200);
+    const combinedQuerySearchBody = await combinedQuerySearchResponse.json();
+    assert.deepEqual(combinedQuerySearchBody.data.map((request: { id: string }) => request.id), ['trace-query-search']);
+    assert.equal(combinedQuerySearchBody.pagination.total, 1);
+
     const clearedFiltersResponse = await apiFetch('/_devtools/api/requests?search=&method=&status=');
     assert.equal(clearedFiltersResponse.status, 200);
     const clearedFiltersBody = await clearedFiltersResponse.json();
@@ -274,7 +311,7 @@ async function run() {
     assert.deepEqual(clearedFiltersBody.pagination, {
       page: 1,
       limit: 20,
-      total: 25,
+      total: 26,
       totalPages: 2,
       hasMore: true,
     });

@@ -397,6 +397,57 @@ assert.deepEqual(
 );
 sortStorage.close();
 
+const querySearchStorage = new SQLiteStorage(":memory:");
+const querySearchSpan: IDevToolsSpan = {
+    traceId: "query-search",
+    spanId: "query-search-root",
+    type: "http.server",
+    name: "GET /users",
+    startedAt: 1500,
+    durationMs: 12,
+    attributes: {
+        "http.request.method": "GET",
+        "url.path": "/users",
+        "http.route": "/users",
+        "url.query": "name=Ada&marker=100%_done",
+        "http.response.status_code": 200,
+    },
+    status: { code: 0 },
+};
+querySearchStorage.saveSpan(querySearchSpan);
+querySearchStorage.saveTraceSummary(querySearchSpan);
+
+for (const search of ["Ada", "name", "name=Ada"]) {
+    const result = querySearchStorage.getPaginatedTraceSummaries(1, 20, search);
+    assert.deepEqual(result.summaries.map(summary => summary.traceId), ["query-search"]);
+    assert.equal(result.total, 1);
+}
+
+const traceIdSearchResult = querySearchStorage.getPaginatedTraceSummaries(1, 20, "query-search");
+assert.deepEqual(traceIdSearchResult.summaries.map(summary => summary.traceId), ["query-search"]);
+assert.equal(traceIdSearchResult.total, 1);
+
+const literalWildcardResult = querySearchStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "100%_done",
+);
+assert.deepEqual(literalWildcardResult.summaries.map(summary => summary.traceId), ["query-search"]);
+assert.equal(literalWildcardResult.total, 1);
+
+const combinedQueryResult = querySearchStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "Ada",
+    "GET",
+    200,
+    1000,
+    2000,
+);
+assert.deepEqual(combinedQueryResult.summaries.map(summary => summary.traceId), ["query-search"]);
+assert.equal(combinedQueryResult.total, 1);
+querySearchStorage.close();
+
 // Overview aggregation uses one canonical trace row per incoming request,
 // ignores the exclusive upper boundary, and safely handles incomplete rows.
 const overviewStorage = new SQLiteStorage(":memory:");
