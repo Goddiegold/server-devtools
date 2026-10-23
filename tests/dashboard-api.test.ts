@@ -239,6 +239,34 @@ async function run() {
     const invalidDateRangeResponse = await apiFetch('/_devtools/api/requests?from=1010&to=1005');
     assert.equal(invalidDateRangeResponse.status, 400);
 
+    const sortedFirstPageResponse = await apiFetch('/_devtools/api/requests?limit=5&sortBy=durationMs&sortDirection=asc');
+    assert.equal(sortedFirstPageResponse.status, 200);
+    const sortedFirstPage = await sortedFirstPageResponse.json();
+    assert.deepEqual(
+      sortedFirstPage.data.map((request: { id: string }) => request.id),
+      ['trace-page-1', 'trace-page-2', 'trace-page-3', 'trace-page-4', 'trace-page-5'],
+    );
+    assert.equal(sortedFirstPage.pagination.total, 25);
+
+    const sortedSecondPageResponse = await apiFetch('/_devtools/api/requests?page=2&limit=5&sortBy=durationMs&sortDirection=asc');
+    assert.equal(sortedSecondPageResponse.status, 200);
+    const sortedSecondPage = await sortedSecondPageResponse.json();
+    assert.deepEqual(
+      sortedSecondPage.data.map((request: { id: string }) => request.id),
+      ['trace-page-6', 'trace-page-7', 'trace-page-8', 'trace-page-9', 'trace-page-10'],
+    );
+
+    const combinedSortedResponse = await apiFetch('/_devtools/api/requests?search=page&method=GET&status=200&sortBy=path&sortDirection=asc');
+    assert.equal(combinedSortedResponse.status, 200);
+    const combinedSortedBody = await combinedSortedResponse.json();
+    assert.deepEqual(
+      combinedSortedBody.data.map((request: { id: string }) => request.id),
+      ['trace-page-10', 'trace-page-11', 'trace-page-12', 'trace-page-13', 'trace-page-14', 'trace-page-15', 'trace-page-16', 'trace-page-17', 'trace-page-18', 'trace-page-19', 'trace-page-2', 'trace-page-20', 'trace-page-21', 'trace-page-22', 'trace-page-23', 'trace-page-24', 'trace-page-3', 'trace-page-4', 'trace-page-5', 'trace-page-6'],
+    );
+
+    const invalidSortResponse = await apiFetch('/_devtools/api/requests?sortBy=createdAt&sortDirection=asc');
+    assert.equal(invalidSortResponse.status, 400);
+
     const clearedFiltersResponse = await apiFetch('/_devtools/api/requests?search=&method=&status=');
     assert.equal(clearedFiltersResponse.status, 200);
     const clearedFiltersBody = await clearedFiltersResponse.json();

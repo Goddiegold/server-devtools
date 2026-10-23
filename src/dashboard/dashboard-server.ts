@@ -3,7 +3,10 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
-import SQLiteStorage from "../storage/sqlite-storage";
+import SQLiteStorage, {
+    type TraceSummarySortDirection,
+    type TraceSummarySortField,
+} from "../storage/sqlite-storage";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
@@ -781,6 +784,25 @@ export default class DashboardServer {
             const toValue = searchParams.get("to");
             const startedAtFrom = parseTimestamp("from");
             const startedAtTo = parseTimestamp("to");
+            const sortByValue = searchParams.get("sortBy");
+            const sortDirectionValue = searchParams.get("sortDirection");
+            const sortFields: TraceSummarySortField[] = [
+                "startedAt",
+                "durationMs",
+                "statusCode",
+                "method",
+                "path",
+            ];
+            const sortField = sortByValue === null || sortByValue === ""
+                ? "startedAt"
+                : sortFields.includes(sortByValue as TraceSummarySortField)
+                    ? sortByValue as TraceSummarySortField
+                    : undefined;
+            const sortDirection = sortDirectionValue === null || sortDirectionValue === ""
+                ? "desc"
+                : sortDirectionValue === "asc" || sortDirectionValue === "desc"
+                    ? sortDirectionValue as TraceSummarySortDirection
+                    : undefined;
             const statusCode = statusValue === null || statusValue === ""
                 ? undefined
                 : /^\d+$/.test(statusValue)
@@ -795,12 +817,14 @@ export default class DashboardServer {
                     (statusCode === undefined || statusCode < 100 || statusCode > 599)) ||
                 (fromValue !== null && fromValue !== "" && startedAtFrom === undefined) ||
                 (toValue !== null && toValue !== "" && startedAtTo === undefined) ||
-                (startedAtFrom !== undefined && startedAtTo !== undefined && startedAtFrom > startedAtTo)
+                (startedAtFrom !== undefined && startedAtTo !== undefined && startedAtFrom > startedAtTo) ||
+                sortField === undefined ||
+                sortDirection === undefined
             ) {
                 res.statusCode = 400;
                 res.setHeader("Content-Type", "application/json");
                 res.end(JSON.stringify({
-                    message: "Page and date filters must be valid, limit must be between 1 and 100, and from must not be after to",
+                    message: "Page, date filters, and sorting must be valid, limit must be between 1 and 100, and from must not be after to",
                 }));
                 return;
             }
@@ -825,6 +849,8 @@ export default class DashboardServer {
                     statusCode,
                     startedAtFrom,
                     startedAtTo,
+                    sortField,
+                    sortDirection,
                 );
             } catch (error) {
                 debugLog("Trace summary lookup failed", {

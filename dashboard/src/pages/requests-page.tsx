@@ -2,13 +2,18 @@ import { useEffect, useState } from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { clearHistory, deleteTrace } from "@/api/traces"
-import { getRequests, type IRequestsPagination } from "@/api/requests"
+import {
+  getRequests,
+  type IRequestsPagination,
+  type RequestsSortDirection,
+  type RequestsSortField,
+} from "@/api/requests"
 import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { IDashboardRequest } from "@/types"
-import { Filter, Loader2, Trash2, X } from "lucide-react"
+import { ArrowDownUp, ChevronDown, ChevronUp, Filter, Loader2, Search, Trash2, X } from "lucide-react"
 
 interface RequestsPageProps {
   onSelectRequest: (request: IDashboardRequest) => void
@@ -70,17 +75,62 @@ function dateInputToTimestamp(value: string): number | undefined {
   return Number.isFinite(timestamp) ? timestamp : undefined
 }
 
+type DateRangePreset = "all" | "15m" | "1h" | "24h" | "7d" | "custom"
+
+const dateRangeOptions: Array<{ value: DateRangePreset; label: string }> = [
+  { value: "all", label: "All time" },
+  { value: "15m", label: "Last 15 minutes" },
+  { value: "1h", label: "Last hour" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "custom", label: "Custom" },
+]
+
+function getDateRangeBounds(
+  preset: DateRangePreset,
+  from: string,
+  to: string,
+  now: number,
+): { from?: number; to?: number } {
+  if (preset === "custom") {
+    return {
+      from: dateInputToTimestamp(from),
+      to: dateInputToTimestamp(to),
+    }
+  }
+
+  if (preset === "all") {
+    return {}
+  }
+
+  const durations: Record<Exclude<DateRangePreset, "all" | "custom">, number> = {
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "24h": 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+  }
+
+  return {
+    from: now - durations[preset],
+    to: now,
+  }
+}
+
 export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [requests, setRequests] = useState<IDashboardRequest[]>([])
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [method, setMethod] = useState("")
   const [status, setStatus] = useState("")
+  const [sortBy, setSortBy] = useState<RequestsSortField>("startedAt")
+  const [sortDirection, setSortDirection] = useState<RequestsSortDirection>("desc")
+  const [dateRange, setDateRange] = useState<DateRangePreset>("all")
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [draftMethod, setDraftMethod] = useState("")
   const [draftStatus, setDraftStatus] = useState("")
+  const [draftDateRange, setDraftDateRange] = useState<DateRangePreset>("all")
   const [draftFrom, setDraftFrom] = useState("")
   const [draftTo, setDraftTo] = useState("")
   const [filterError, setFilterError] = useState<string | null>(null)
@@ -95,11 +145,12 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const activeFilterCount =
     Number(Boolean(method)) +
     Number(Boolean(status)) +
-    Number(Boolean(from || to))
+    Number(dateRange !== "all")
 
   function openFilters() {
     setDraftMethod(method)
     setDraftStatus(status)
+    setDraftDateRange(dateRange)
     setDraftFrom(from)
     setDraftTo(to)
     setFilterError(null)
@@ -111,6 +162,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     const toTimestamp = dateInputToTimestamp(draftTo)
 
     if (
+      draftDateRange === "custom" &&
       draftFrom &&
       draftTo &&
       fromTimestamp !== undefined &&
@@ -123,25 +175,49 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
 
     setMethod(draftMethod)
     setStatus(draftStatus)
-    setFrom(draftFrom)
-    setTo(draftTo)
+    setDateRange(draftDateRange)
+    setFrom(draftDateRange === "custom" ? draftFrom : "")
+    setTo(draftDateRange === "custom" ? draftTo : "")
     setPage(1)
     setFilterError(null)
     setFiltersOpen(false)
   }
 
-  function clearFilters() {
+  function clearDraftFilters() {
     setDraftMethod("")
     setDraftStatus("")
+    setDraftDateRange("all")
     setDraftFrom("")
     setDraftTo("")
-    setMethod("")
-    setStatus("")
-    setFrom("")
-    setTo("")
-    setPage(1)
     setFilterError(null)
-    setFiltersOpen(false)
+  }
+
+  function changeSort(nextSortBy: RequestsSortField) {
+    if (sortBy === nextSortBy) {
+      setSortDirection((currentDirection) =>
+        currentDirection === "asc" ? "desc" : "asc"
+      )
+    } else {
+      setSortBy(nextSortBy)
+      setSortDirection("asc")
+    }
+    setPage(1)
+  }
+
+  function sortAriaValue(field: RequestsSortField): "ascending" | "descending" | "none" {
+    if (sortBy !== field) {
+      return "none"
+    }
+    return sortDirection === "asc" ? "ascending" : "descending"
+  }
+
+  function sortIndicator(field: RequestsSortField) {
+    if (sortBy !== field) {
+      return <ArrowDownUp aria-hidden="true" className="size-3.5 opacity-50" />
+    }
+    return sortDirection === "asc"
+      ? <ChevronUp aria-hidden="true" className="size-3.5" />
+      : <ChevronDown aria-hidden="true" className="size-3.5" />
   }
 
   async function confirmDelete() {
@@ -214,14 +290,18 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     async function loadRequests() {
       try {
         setLoading(true)
+        const now = Date.now()
+        const dateBounds = getDateRangeBounds(dateRange, from, to, now)
         const result = await getRequests(
           page,
           20,
           search,
           method,
           status,
-          dateInputToTimestamp(from),
-          dateInputToTimestamp(to),
+          dateBounds.from,
+          dateBounds.to,
+          sortBy,
+          sortDirection,
         )
         if (active) {
           setRequests(result.data)
@@ -250,7 +330,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       active = false
       clearInterval(interval)
     }
-  }, [page, search, method, status, from, to])
+  }, [page, search, method, status, dateRange, from, to, sortBy, sortDirection])
 
   return (
     <main className="p-6">
@@ -276,14 +356,21 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex w-full max-w-md items-center gap-2">
-          <Input
-            placeholder="Search requests..."
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value)
-              setPage(1)
-            }}
-          />
+          <div className="relative flex-1">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              className="pl-8"
+              placeholder="Search requests..."
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
           {search && (
             <Button
               variant="ghost"
@@ -368,35 +455,62 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                   </div>
 
                   <div className="space-y-3 border-t pt-4">
-                    <p className="text-xs text-muted-foreground">
-                      Date and time ({Intl.DateTimeFormat().resolvedOptions().timeZone})
-                    </p>
                     <label className="grid gap-1.5 text-sm font-medium">
-                      From
-                      <input
-                        aria-label="From date and time"
-                        type="datetime-local"
-                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
-                        value={draftFrom}
+                      Date range
+                      <select
+                        aria-label="Date range"
+                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal"
+                        value={draftDateRange}
                         onChange={(event) => {
-                          setDraftFrom(event.target.value)
+                          const nextRange = event.target.value as DateRangePreset
+                          setDraftDateRange(nextRange)
+                          if (nextRange !== "custom") {
+                            setDraftFrom("")
+                            setDraftTo("")
+                          }
                           setFilterError(null)
                         }}
-                      />
+                      >
+                        {dateRangeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </label>
-                    <label className="grid gap-1.5 text-sm font-medium">
-                      To
-                      <input
-                        aria-label="To date and time"
-                        type="datetime-local"
-                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
-                        value={draftTo}
-                        onChange={(event) => {
-                          setDraftTo(event.target.value)
-                          setFilterError(null)
-                        }}
-                      />
-                    </label>
+                    {draftDateRange === "custom" && (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Date and time ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+                        </p>
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          From
+                          <input
+                            aria-label="From date and time"
+                            type="datetime-local"
+                            className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
+                            value={draftFrom}
+                            onChange={(event) => {
+                              setDraftFrom(event.target.value)
+                              setFilterError(null)
+                            }}
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          To
+                          <input
+                            aria-label="To date and time"
+                            type="datetime-local"
+                            className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
+                            value={draftTo}
+                            onChange={(event) => {
+                              setDraftTo(event.target.value)
+                              setFilterError(null)
+                            }}
+                          />
+                        </label>
+                      </>
+                    )}
                     {filterError && (
                       <p className="text-sm text-destructive" role="alert">
                         {filterError}
@@ -408,7 +522,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={clearFilters}
+                      onClick={clearDraftFilters}
                     >
                       Clear
                     </Button>
@@ -454,12 +568,72 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 font-medium">METHOD</th>
-              <th className="px-4 py-3 font-medium">PATH</th>
-              <th className="px-4 py-3 font-medium">STATUS</th>
+              <th aria-sort={sortAriaValue("method")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by HTTP method, currently ${sortAriaValue("method")}`}
+                  onClick={() => changeSort("method")}
+                >
+                  METHOD
+                  {sortIndicator("method")}
+                </Button>
+              </th>
+              <th aria-sort={sortAriaValue("path")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by path, currently ${sortAriaValue("path")}`}
+                  onClick={() => changeSort("path")}
+                >
+                  PATH
+                  {sortIndicator("path")}
+                </Button>
+              </th>
+              <th aria-sort={sortAriaValue("statusCode")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by HTTP status, currently ${sortAriaValue("statusCode")}`}
+                  onClick={() => changeSort("statusCode")}
+                >
+                  STATUS
+                  {sortIndicator("statusCode")}
+                </Button>
+              </th>
               <th className="px-4 py-3 font-medium">USER</th>
-              <th className="px-4 py-3 font-medium">STARTED AT</th>
-              <th className="px-4 py-3 text-right font-medium">DURATION</th>
+              <th aria-sort={sortAriaValue("startedAt")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by request start time, currently ${sortAriaValue("startedAt")}`}
+                  onClick={() => changeSort("startedAt")}
+                >
+                  STARTED AT
+                  {sortIndicator("startedAt")}
+                </Button>
+              </th>
+              <th aria-sort={sortAriaValue("durationMs")} className="px-4 py-3 text-right font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-mr-2 gap-1 uppercase"
+                  aria-label={`Sort by duration, currently ${sortAriaValue("durationMs")}`}
+                  onClick={() => changeSort("durationMs")}
+                >
+                  DURATION
+                  {sortIndicator("durationMs")}
+                </Button>
+              </th>
               <th className="w-12 px-4 py-3" />
             </tr>
           </thead>

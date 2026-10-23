@@ -318,6 +318,85 @@ assert.deepEqual(
 assert.equal(exclusiveEndRequests.total, 2);
 requestFilterStorage.close();
 
+const sortStorage = new SQLiteStorage(":memory:");
+for (const request of [
+    { traceId: "sort-z", startedAt: 1000, durationMs: 50, statusCode: 200, method: "GET", path: "/z" },
+    { traceId: "sort-a", startedAt: 2000, durationMs: 50, statusCode: 500, method: "POST", path: "/a" },
+    { traceId: "sort-missing", startedAt: 3000, durationMs: 1 },
+    { traceId: "sort-b", startedAt: 4000, durationMs: 10, statusCode: 200, method: "GET", path: "/b" },
+]) {
+    const span: IDevToolsSpan = {
+        traceId: request.traceId,
+        spanId: `${request.traceId}-root`,
+        type: "http.server",
+        name: "GET /sorted",
+        startedAt: request.startedAt,
+        durationMs: request.durationMs,
+        attributes: {
+            ...(request.method ? { "http.request.method": request.method } : {}),
+            ...(request.path ? { "url.path": request.path } : {}),
+            ...(request.statusCode === undefined
+                ? {}
+                : { "http.response.status_code": request.statusCode }),
+        },
+        status: { code: 0 },
+    };
+    sortStorage.saveTraceSummary(span);
+}
+(sortStorage as any).db
+    .prepare("UPDATE traces SET duration_ms = NULL WHERE trace_id = ?")
+    .run("sort-missing");
+
+const durationAscending = sortStorage.getPaginatedTraceSummaries(
+    1,
+    2,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "durationMs",
+    "asc",
+);
+assert.deepEqual(
+    durationAscending.summaries.map(summary => summary.traceId),
+    ["sort-b", "sort-a"],
+);
+assert.equal(durationAscending.total, 4);
+
+const statusDescending = sortStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "statusCode",
+    "desc",
+);
+assert.deepEqual(
+    statusDescending.summaries.map(summary => summary.traceId),
+    ["sort-a", "sort-b", "sort-z", "sort-missing"],
+);
+
+const methodAscending = sortStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "method",
+    "asc",
+);
+assert.deepEqual(
+    methodAscending.summaries.map(summary => summary.traceId),
+    ["sort-b", "sort-z", "sort-a", "sort-missing"],
+);
+sortStorage.close();
+
 // Overview aggregation uses one canonical trace row per incoming request,
 // ignores the exclusive upper boundary, and safely handles incomplete rows.
 const overviewStorage = new SQLiteStorage(":memory:");

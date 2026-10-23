@@ -3,6 +3,13 @@ import { DashboardOverviewRange, IDevToolsCurrentUser, IDevToolsSpan, IDevToolsT
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 import Config from "../config";
 
+export type TraceSummarySortField =
+    | "startedAt"
+    | "durationMs"
+    | "statusCode"
+    | "method"
+    | "path";
+export type TraceSummarySortDirection = "asc" | "desc";
 
 interface ISessionRow {
     session_hash: string;
@@ -375,6 +382,8 @@ export default class SQLiteStorage {
         statusCode?: number,
         startedAtFrom?: number,
         startedAtTo?: number,
+        sortField: TraceSummarySortField = "startedAt",
+        sortDirection: TraceSummarySortDirection = "desc",
     ): {
         summaries: ITraceSummary[];
         total: number;
@@ -424,6 +433,16 @@ export default class SQLiteStorage {
         const whereClause = conditions.length > 0
             ? `WHERE ${conditions.join(" AND ")}`
             : "";
+        const sortColumns: Record<TraceSummarySortField, string> = {
+            startedAt: "t.started_at",
+            durationMs: "t.duration_ms",
+            statusCode: "t.status_code",
+            method: "t.method",
+            path: "t.path",
+        };
+        const sortColumn = sortColumns[sortField];
+        const sortNullsLast = `CASE WHEN ${sortColumn} IS NULL THEN 1 ELSE 0 END ASC`;
+        const sortOrder = `${sortColumn} ${sortDirection.toUpperCase()}`;
         const totalRow = this.db.prepare(`
         SELECT COUNT(*) AS total
         FROM traces t
@@ -440,7 +459,7 @@ export default class SQLiteStorage {
         LEFT JOIN trace_metadata tm
             ON tm.trace_id = t.trace_id
         ${whereClause}
-        ORDER BY t.started_at DESC
+        ORDER BY ${sortNullsLast}, ${sortOrder}, t.trace_id ASC
         LIMIT ? OFFSET ?
     `).all(...parameters, limit, offset);
 

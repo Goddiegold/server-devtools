@@ -14,6 +14,14 @@ export interface IRequestsResponse {
   pagination: IRequestsPagination
 }
 
+export type RequestsSortField =
+  | "startedAt"
+  | "durationMs"
+  | "statusCode"
+  | "method"
+  | "path"
+export type RequestsSortDirection = "asc" | "desc"
+
 export async function getRequests(
   page = 1,
   limit = 20,
@@ -22,6 +30,8 @@ export async function getRequests(
   status = "",
   from?: number,
   to?: number,
+  sortBy: RequestsSortField = "startedAt",
+  sortDirection: RequestsSortDirection = "desc",
 ): Promise<IRequestsResponse> {
   const params = new URLSearchParams({
     page: String(page),
@@ -43,6 +53,8 @@ export async function getRequests(
   if (to !== undefined) {
     params.set("to", String(to))
   }
+  params.set("sortBy", sortBy)
+  params.set("sortDirection", sortDirection)
 
   const response = await apiFetch(
     `/_devtools/api/requests?${params.toString()}`
