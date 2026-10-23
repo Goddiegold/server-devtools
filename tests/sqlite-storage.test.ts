@@ -264,6 +264,60 @@ storage.saveTraceSummary(postClearTrace);
 assert.equal(storage.getTrace("trace-after-clear")?.traceId, "trace-after-clear");
 assert.equal(storage.getTraceSummaries().length, 1);
 
+const requestFilterStorage = new SQLiteStorage(":memory:");
+for (const request of [
+    { traceId: "filter-before", startedAt: 1000 },
+    { traceId: "filter-start", startedAt: 2000 },
+    { traceId: "filter-middle", startedAt: 3000 },
+    { traceId: "filter-end", startedAt: 4000 },
+]) {
+    const span: IDevToolsSpan = {
+        traceId: request.traceId,
+        spanId: `${request.traceId}-root`,
+        type: "http.server",
+        name: "GET /filtered",
+        startedAt: request.startedAt,
+        durationMs: 10,
+        attributes: {
+            "http.request.method": "GET",
+            "url.path": "/filtered",
+            "http.response.status_code": 200,
+        },
+        status: { code: 0 },
+    };
+    requestFilterStorage.saveTraceSummary(span);
+}
+
+const filteredRequests = requestFilterStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    2000,
+    4001,
+);
+assert.deepEqual(
+    filteredRequests.summaries.map(summary => summary.traceId),
+    ["filter-end", "filter-middle", "filter-start"],
+);
+assert.equal(filteredRequests.total, 3);
+const exclusiveEndRequests = requestFilterStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    2000,
+    4000,
+);
+assert.deepEqual(
+    exclusiveEndRequests.summaries.map(summary => summary.traceId),
+    ["filter-middle", "filter-start"],
+);
+assert.equal(exclusiveEndRequests.total, 2);
+requestFilterStorage.close();
+
 // Overview aggregation uses one canonical trace row per incoming request,
 // ignores the exclusive upper boundary, and safely handles incomplete rows.
 const overviewStorage = new SQLiteStorage(":memory:");

@@ -373,6 +373,8 @@ export default class SQLiteStorage {
         search = "",
         method?: string,
         statusCode?: number,
+        startedAtFrom?: number,
+        startedAtTo?: number,
     ): {
         summaries: ITraceSummary[];
         total: number;
@@ -407,6 +409,16 @@ export default class SQLiteStorage {
         if (statusCode !== undefined) {
             conditions.push("t.status_code = ?");
             parameters.push(statusCode);
+        }
+
+        if (startedAtFrom !== undefined) {
+            conditions.push("t.started_at >= ?");
+            parameters.push(startedAtFrom);
+        }
+
+        if (startedAtTo !== undefined) {
+            conditions.push("t.started_at < ?");
+            parameters.push(startedAtTo);
         }
 
         const whereClause = conditions.length > 0

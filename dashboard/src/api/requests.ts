@@ -20,6 +20,8 @@ export async function getRequests(
   search = "",
   method = "",
   status = "",
+  from?: number,
+  to?: number,
 ): Promise<IRequestsResponse> {
   const params = new URLSearchParams({
     page: String(page),
@@ -34,6 +36,12 @@ export async function getRequests(
   }
   if (status) {
     params.set("status", status)
+  }
+  if (from !== undefined) {
+    params.set("from", String(from))
+  }
+  if (to !== undefined) {
+    params.set("to", String(to))
   }
 
   const response = await apiFetch(

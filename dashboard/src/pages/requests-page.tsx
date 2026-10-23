@@ -60,12 +60,23 @@ function statusBadgeClass(statusCode?: number): string {
   }
 }
 
+function dateInputToTimestamp(value: string): number | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : undefined
+}
+
 export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [requests, setRequests] = useState<IDashboardRequest[]>([])
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [method, setMethod] = useState("")
   const [status, setStatus] = useState("")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -144,7 +155,15 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     async function loadRequests() {
       try {
         setLoading(true)
-        const result = await getRequests(page, 20, search, method, status)
+        const result = await getRequests(
+          page,
+          20,
+          search,
+          method,
+          status,
+          dateInputToTimestamp(from),
+          dateInputToTimestamp(to),
+        )
         if (active) {
           setRequests(result.data)
           setPagination(result.pagination)
@@ -172,7 +191,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       active = false
       clearInterval(interval)
     }
-  }, [page, search, method, status])
+  }, [page, search, method, status, from, to])
 
   return (
     <main className="p-6">
@@ -248,14 +267,42 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          From
+          <input
+            aria-label="From date"
+            type="datetime-local"
+            className="h-9 rounded-md border bg-background px-3 text-sm text-foreground"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value)
+              setPage(1)
+            }}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          To
+          <input
+            aria-label="To date"
+            type="datetime-local"
+            className="h-9 rounded-md border bg-background px-3 text-sm text-foreground"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value)
+              setPage(1)
+            }}
+          />
+        </label>
         <Button
           variant="outline"
           size="lg"
-          disabled={!search && !method && !status}
+          disabled={!search && !method && !status && !from && !to}
           onClick={() => {
             setSearch("")
             setMethod("")
             setStatus("")
+            setFrom("")
+            setTo("")
             setPage(1)
           }}
         >

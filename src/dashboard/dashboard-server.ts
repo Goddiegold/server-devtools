@@ -764,6 +764,23 @@ export default class DashboardServer {
             const search = searchParams.get("search") ?? "";
             const method = searchParams.get("method")?.trim().toUpperCase() || undefined;
             const statusValue = searchParams.get("status");
+            const parseTimestamp = (name: string) => {
+                const value = searchParams.get(name);
+                if (value === null || value === "") {
+                    return undefined;
+                }
+
+                if (!/^\d+$/.test(value)) {
+                    return undefined;
+                }
+
+                const parsed = Number(value);
+                return Number.isSafeInteger(parsed) ? parsed : undefined;
+            };
+            const fromValue = searchParams.get("from");
+            const toValue = searchParams.get("to");
+            const startedAtFrom = parseTimestamp("from");
+            const startedAtTo = parseTimestamp("to");
             const statusCode = statusValue === null || statusValue === ""
                 ? undefined
                 : /^\d+$/.test(statusValue)
@@ -775,12 +792,15 @@ export default class DashboardServer {
                 limit === undefined ||
                 limit > 100 ||
                 (statusValue !== null && statusValue !== "" &&
-                    (statusCode === undefined || statusCode < 100 || statusCode > 599))
+                    (statusCode === undefined || statusCode < 100 || statusCode > 599)) ||
+                (fromValue !== null && fromValue !== "" && startedAtFrom === undefined) ||
+                (toValue !== null && toValue !== "" && startedAtTo === undefined) ||
+                (startedAtFrom !== undefined && startedAtTo !== undefined && startedAtFrom > startedAtTo)
             ) {
                 res.statusCode = 400;
                 res.setHeader("Content-Type", "application/json");
                 res.end(JSON.stringify({
-                    message: "Page must be a positive integer and limit must be between 1 and 100",
+                    message: "Page and date filters must be valid, limit must be between 1 and 100, and from must not be after to",
                 }));
                 return;
             }
@@ -803,6 +823,8 @@ export default class DashboardServer {
                     search,
                     method,
                     statusCode,
+                    startedAtFrom,
+                    startedAtTo,
                 );
             } catch (error) {
                 debugLog("Trace summary lookup failed", {

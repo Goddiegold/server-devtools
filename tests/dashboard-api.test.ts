@@ -221,6 +221,24 @@ async function run() {
     assert.deepEqual(combinedFilterBody.data.map((request: { id: string }) => request.id), ['trace-page-1']);
     assert.equal(combinedFilterBody.pagination.total, 1);
 
+    const dateFilteredResponse = await apiFetch('/_devtools/api/requests?from=1005&to=1010');
+    assert.equal(dateFilteredResponse.status, 200);
+    const dateFilteredBody = await dateFilteredResponse.json();
+    assert.deepEqual(
+      dateFilteredBody.data.map((request: { id: string }) => request.id),
+      ['trace-page-9', 'trace-page-8', 'trace-page-7', 'trace-page-6', 'trace-page-5'],
+    );
+    assert.deepEqual(dateFilteredBody.pagination, {
+      page: 1,
+      limit: 20,
+      total: 5,
+      totalPages: 1,
+      hasMore: false,
+    });
+
+    const invalidDateRangeResponse = await apiFetch('/_devtools/api/requests?from=1010&to=1005');
+    assert.equal(invalidDateRangeResponse.status, 400);
+
     const clearedFiltersResponse = await apiFetch('/_devtools/api/requests?search=&method=&status=');
     assert.equal(clearedFiltersResponse.status, 200);
     const clearedFiltersBody = await clearedFiltersResponse.json();
