@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { clearHistory, deleteTrace } from "@/api/traces"
 import { getRequests, type IRequestsPagination } from "@/api/requests"
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { IDashboardRequest } from "@/types"
-import { Loader2, Trash2, X } from "lucide-react"
+import { Filter, Loader2, Trash2, X } from "lucide-react"
 
 interface RequestsPageProps {
   onSelectRequest: (request: IDashboardRequest) => void
@@ -77,6 +78,12 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [status, setStatus] = useState("")
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [draftMethod, setDraftMethod] = useState("")
+  const [draftStatus, setDraftStatus] = useState("")
+  const [draftFrom, setDraftFrom] = useState("")
+  const [draftTo, setDraftTo] = useState("")
+  const [filterError, setFilterError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +91,58 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [deletingTraceId, setDeletingTraceId] = useState<string | null>(null)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearingHistory, setClearingHistory] = useState(false)
+
+  const activeFilterCount =
+    Number(Boolean(method)) +
+    Number(Boolean(status)) +
+    Number(Boolean(from || to))
+
+  function openFilters() {
+    setDraftMethod(method)
+    setDraftStatus(status)
+    setDraftFrom(from)
+    setDraftTo(to)
+    setFilterError(null)
+    setFiltersOpen(true)
+  }
+
+  function applyFilters() {
+    const fromTimestamp = dateInputToTimestamp(draftFrom)
+    const toTimestamp = dateInputToTimestamp(draftTo)
+
+    if (
+      draftFrom &&
+      draftTo &&
+      fromTimestamp !== undefined &&
+      toTimestamp !== undefined &&
+      fromTimestamp > toTimestamp
+    ) {
+      setFilterError("From must be earlier than or equal to To.")
+      return
+    }
+
+    setMethod(draftMethod)
+    setStatus(draftStatus)
+    setFrom(draftFrom)
+    setTo(draftTo)
+    setPage(1)
+    setFilterError(null)
+    setFiltersOpen(false)
+  }
+
+  function clearFilters() {
+    setDraftMethod("")
+    setDraftStatus("")
+    setDraftFrom("")
+    setDraftTo("")
+    setMethod("")
+    setStatus("")
+    setFrom("")
+    setTo("")
+    setPage(1)
+    setFilterError(null)
+    setFiltersOpen(false)
+  }
 
   async function confirmDelete() {
     if (!pendingDelete || deletingTraceId !== null) {
@@ -239,75 +298,129 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
             </Button>
           )}
         </div>
-        <select
-          aria-label="Method"
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-          value={method}
-          onChange={(event) => {
-            setMethod(event.target.value)
-            setPage(1)
+        <PopoverPrimitive.Root
+          open={filtersOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              openFilters()
+            } else {
+              setFilterError(null)
+              setFiltersOpen(false)
+            }
           }}
         >
-          <option value="">All methods</option>
-          {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Status"
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All statuses</option>
-          {[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504].map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          From
-          <input
-            aria-label="From date"
-            type="datetime-local"
-            className="h-9 rounded-md border bg-background px-3 text-sm text-foreground"
-            value={from}
-            onChange={(event) => {
-              setFrom(event.target.value)
-              setPage(1)
-            }}
-          />
-        </label>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          To
-          <input
-            aria-label="To date"
-            type="datetime-local"
-            className="h-9 rounded-md border bg-background px-3 text-sm text-foreground"
-            value={to}
-            onChange={(event) => {
-              setTo(event.target.value)
-              setPage(1)
-            }}
-          />
-        </label>
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={!search && !method && !status && !from && !to}
-          onClick={() => {
-            setSearch("")
-            setMethod("")
-            setStatus("")
-            setFrom("")
-            setTo("")
-            setPage(1)
-          }}
-        >
-          Reset filters
-        </Button>
+          <PopoverPrimitive.Trigger
+            render={
+              <Button
+                variant="outline"
+                size="lg"
+                aria-label="Filters"
+                aria-haspopup="dialog"
+              />
+            }
+          >
+            <Filter />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </PopoverPrimitive.Trigger>
+          <PopoverPrimitive.Portal>
+            <PopoverPrimitive.Positioner
+              side="bottom"
+              align="start"
+              sideOffset={8}
+              className="z-50 max-w-[calc(100vw-2rem)]"
+            >
+              <PopoverPrimitive.Popup className="w-[min(24rem,calc(100vw-2rem))] rounded-lg border bg-background p-4 text-foreground shadow-lg outline-none">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Method
+                      <select
+                        aria-label="Method"
+                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal"
+                        value={draftMethod}
+                        onChange={(event) => setDraftMethod(event.target.value)}
+                      >
+                        <option value="">All methods</option>
+                        {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Status
+                      <select
+                        aria-label="Status"
+                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal"
+                        value={draftStatus}
+                        onChange={(event) => setDraftStatus(event.target.value)}
+                      >
+                        <option value="">All statuses</option>
+                        {[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504].map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="space-y-3 border-t pt-4">
+                    <p className="text-xs text-muted-foreground">
+                      Date and time ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+                    </p>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      From
+                      <input
+                        aria-label="From date and time"
+                        type="datetime-local"
+                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
+                        value={draftFrom}
+                        onChange={(event) => {
+                          setDraftFrom(event.target.value)
+                          setFilterError(null)
+                        }}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      To
+                      <input
+                        aria-label="To date and time"
+                        type="datetime-local"
+                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
+                        value={draftTo}
+                        onChange={(event) => {
+                          setDraftTo(event.target.value)
+                          setFilterError(null)
+                        }}
+                      />
+                    </label>
+                    {filterError && (
+                      <p className="text-sm text-destructive" role="alert">
+                        {filterError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t pt-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={clearFilters}
+                    >
+                      Clear
+                    </Button>
+                    <Button type="button" onClick={applyFilters}>
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </PopoverPrimitive.Popup>
+            </PopoverPrimitive.Positioner>
+          </PopoverPrimitive.Portal>
+        </PopoverPrimitive.Root>
         {pagination && (
           <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
             <span className="whitespace-nowrap">
