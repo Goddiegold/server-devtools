@@ -2,9 +2,43 @@ import { ClientRequest, IncomingMessage } from "node:http";
 import SQLiteStorage from "../../storage/sqlite-storage";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { debugLog } from "../../utils/logger";
-interface FetchCaptureContext {
-  spanId?: string;
+import Config from "../../config";
+import {
+  FetchCaptureContext,
+  NativeBodyCaptureState,
+} from "../../types/outbound-http";
+
+function captureNativeBodyChunk(
+  state: NativeBodyCaptureState,
+  chunk: unknown,
+  encoding?: BufferEncoding,
+): void {
+  if (state.oversized || chunk === undefined || chunk === null) {
+    return;
+  }
+
+  let buffer: Buffer;
+
+  try {
+    buffer = typeof chunk === "string"
+      ? Buffer.from(chunk, encoding)
+      : Buffer.from(chunk as any);
+  } catch {
+    state.oversized = true;
+    state.chunks.length = 0;
+    return;
+  }
+
+  if (state.bytes + buffer.length > Config.NATIVE_HTTP_BODY_LIMIT_BYTES) {
+    state.oversized = true;
+    state.chunks.length = 0;
+    return;
+  }
+
+  state.chunks.push(buffer);
+  state.bytes += buffer.length;
 }
+
 export class OutboundHttpCapture {
   private readonly fetchContext =
     new AsyncLocalStorage<FetchCaptureContext>();
@@ -65,29 +99,37 @@ export class OutboundHttpCapture {
     spanId: string,
     request: ClientRequest,
   ): void {
-    const chunks: Buffer[] = [];
+    const state: NativeBodyCaptureState = {
+      chunks: [],
+      bytes: 0,
+      oversized: false,
+    };
 
     const originalWrite = request.write.bind(request);
     const originalEnd = request.end.bind(request);
 
     request.write = ((chunk: any, ...args: any[]) => {
-      if (chunk !== undefined && chunk !== null) {
-        chunks.push(Buffer.from(chunk));
-      }
+      captureNativeBodyChunk(
+        state,
+        chunk,
+        typeof args[0] === "string" ? args[0] as BufferEncoding : undefined,
+      );
 
       return originalWrite(chunk, ...args);
     }) as typeof request.write;
 
     request.end = ((chunk?: any, ...args: any[]) => {
-      if (chunk !== undefined && chunk !== null) {
-        chunks.push(Buffer.from(chunk));
-      }
+      captureNativeBodyChunk(
+        state,
+        chunk,
+        typeof args[0] === "string" ? args[0] as BufferEncoding : undefined,
+      );
 
-      if (chunks.length > 0) {
+      if (!state.oversized && state.chunks.length > 0) {
         try {
           this.storage.updateHttpClientDetails(spanId, {
             requestBody: this.parseBody(
-              Buffer.concat(chunks),
+              Buffer.concat(state.chunks),
               request.getHeader("content-type"),
             ),
           });
@@ -127,21 +169,25 @@ export class OutboundHttpCapture {
     spanId: string,
     response: IncomingMessage,
   ): void {
-    const chunks: Buffer[] = [];
+    const state: NativeBodyCaptureState = {
+      chunks: [],
+      bytes: 0,
+      oversized: false,
+    };
 
     response.on("data", (chunk) => {
-      chunks.push(Buffer.from(chunk));
+      captureNativeBodyChunk(state, chunk);
     });
 
     response.once("end", () => {
-      if (chunks.length === 0) {
+      if (state.oversized || state.chunks.length === 0) {
         return;
       }
 
       try {
         this.storage.updateHttpClientDetails(spanId, {
           responseBody: this.parseBody(
-            Buffer.concat(chunks),
+            Buffer.concat(state.chunks),
             response.headers["content-type"],
           ),
         });

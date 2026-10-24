@@ -120,6 +120,65 @@ test("native HTTP capture records headers and complete chunked bodies without co
   assert.deepEqual(details?.responseBody, { received: "by-app" });
 });
 
+test("native HTTP capture limits request and response bodies without changing stream bytes", async (t) => {
+  const storage = createStorage(t);
+  const bodyLimit = 256 * 1024;
+  const cases = [
+    { name: "below", body: "é".repeat(bodyLimit / 2 - 1) },
+    { name: "exact", body: "😀".repeat(bodyLimit / 4) },
+    { name: "above", body: `${"😀".repeat(bodyLimit / 4)}x` },
+  ];
+  const server = createServer((request, response) => {
+    const testCase = cases.find((value) => request.url === `/${value.name}`);
+    assert.ok(testCase);
+    const requestChunks: Buffer[] = [];
+    request.on("data", (chunk) => requestChunks.push(Buffer.from(chunk)));
+    request.on("end", () => {
+      assert.equal(Buffer.concat(requestChunks).toString(), testCase.body);
+      response.writeHead(200, { "content-type": "text/plain" });
+      const responseBuffer = Buffer.from(testCase.body);
+      response.write(responseBuffer.subarray(0, Math.floor(responseBuffer.length / 2)));
+      response.end(responseBuffer.subarray(Math.floor(responseBuffer.length / 2)));
+    });
+  });
+  closeServer(t, server);
+  const baseUrl = await startServer(server);
+  const capture = new OutboundHttpCapture(storage);
+
+  for (const testCase of cases) {
+    const request = httpRequest(`${baseUrl}/${testCase.name}`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+    });
+    capture.trackNativeRequest(`native-${testCase.name}`, request);
+    const bodyBuffer = Buffer.from(testCase.body);
+    request.write(bodyBuffer.subarray(0, Math.floor(bodyBuffer.length / 2)));
+
+    const responseReceived = new Promise<string>((resolve, reject) => {
+      request.once("response", (response) => {
+        capture.trackNativeResponse(`native-${testCase.name}`, response);
+        const responseChunks: Buffer[] = [];
+        response.on("data", (chunk) => responseChunks.push(Buffer.from(chunk)));
+        response.once("end", () => resolve(Buffer.concat(responseChunks).toString()));
+        response.once("error", reject);
+      });
+      request.once("error", reject);
+    });
+
+    request.end(bodyBuffer.subarray(Math.floor(bodyBuffer.length / 2)));
+    assert.equal(await responseReceived, testCase.body);
+
+    const details = storage.getHttpClientDetails(`native-${testCase.name}`);
+    if (bodyBuffer.length <= bodyLimit) {
+      assert.equal(details?.requestBody, testCase.body);
+      assert.equal(details?.responseBody, testCase.body);
+    } else {
+      assert.equal(details?.requestBody, undefined);
+      assert.equal(details?.responseBody, undefined);
+    }
+  }
+});
+
 test("fetch capture stores JSON/text payloads and headers, permits bodyless requests, and isolates concurrent spans", async (t) => {
   const storage = createStorage(t);
   const server = createServer((request, response) => {
@@ -215,7 +274,7 @@ test("fetch capture errors do not reject or consume a successful response", asyn
     headers: new Headers(),
     body: {},
     text: async () => { throw new Error("capture body read failed"); },
-  } as Response);
+  } as unknown as Response);
 
   globalThis.fetch = (async () => {
     capture.associateFetchSpan("fetch-span");

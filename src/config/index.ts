@@ -23,6 +23,7 @@ export default {
         "authorization",
         "cookie",
     ],
+    NATIVE_HTTP_BODY_LIMIT_BYTES: 256 * 1024,
     STORAGE: {
         SCHEMA_VERSION: 1
     }
