@@ -12,6 +12,7 @@ import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialo
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import type { IDashboardRequest } from "@/types"
 import { ArrowDownUp, ChevronDown, ChevronUp, Filter, Loader2, Search, Trash2, X } from "lucide-react"
 
@@ -433,9 +434,9 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-sm font-medium">
                       Method
-                      <select
+                      <Select
                         aria-label="Method"
-                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal"
+                        className="font-normal"
                         value={draftMethod}
                         onChange={(event) => setDraftMethod(event.target.value)}
                       >
@@ -443,13 +444,13 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                         {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((option) => (
                           <option key={option} value={option}>{option}</option>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                     <label className="grid gap-1.5 text-sm font-medium">
                       Status
-                      <select
+                      <Select
                         aria-label="Status"
-                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal"
+                        className="font-normal"
                         value={draftStatus}
                         onChange={(event) => setDraftStatus(event.target.value)}
                       >
@@ -457,16 +458,16 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                         {[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504].map((option) => (
                           <option key={option} value={option}>{option}</option>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                   </div>
 
                   <div className="space-y-3 border-t pt-4">
                     <label className="grid gap-1.5 text-sm font-medium">
                       Date range
-                      <select
+                      <Select
                         aria-label="Date range"
-                        className="h-9 rounded-md border bg-background px-3 text-sm font-normal"
+                        className="font-normal"
                         value={draftDateRange}
                         onChange={(event) => {
                           const nextRange = event.target.value as DateRangePreset
@@ -483,7 +484,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                             {option.label}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                     {draftDateRange === "custom" && (
                       <>
