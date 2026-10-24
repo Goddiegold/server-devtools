@@ -205,6 +205,30 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   assert.equal(emptyDetails?.responseBody, undefined);
 });
 
+test("fetch capture errors do not reject or consume a successful response", async (t) => {
+  const storage = createStorage(t);
+  const capture = new OutboundHttpCapture(storage);
+  const originalFetch = globalThis.fetch;
+  const applicationResponse = new Response("application response");
+
+  applicationResponse.clone = () => ({
+    headers: new Headers(),
+    body: {},
+    text: async () => { throw new Error("capture body read failed"); },
+  } as Response);
+
+  globalThis.fetch = (async () => {
+    capture.associateFetchSpan("fetch-span");
+    return applicationResponse;
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await globalThis.fetch("http://example.test");
+
+  assert.equal(await response.text(), "application response");
+});
+
 test("stopping fetch capture is safe before startup and restores the original fetch", (t) => {
   const storage = createStorage(t);
   const capture = new OutboundHttpCapture(storage);

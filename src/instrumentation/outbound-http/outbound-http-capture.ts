@@ -221,7 +221,15 @@ export class OutboundHttpCapture {
       init?: RequestInit,
     ): Promise<Response> => {
       const request = new Request(input, init);
-      const requestClone = request.clone();
+      let requestClone: Request | undefined;
+
+      try {
+        requestClone = request.clone();
+      } catch (error) {
+        debugLog("Fetch request capture clone failed", {
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+      }
 
       const context: FetchCaptureContext = {};
 
@@ -235,10 +243,38 @@ export class OutboundHttpCapture {
           return response;
         }
 
-        const responseClone = response.clone();
+        let responseClone: Response | undefined;
 
-        await this.captureFetchRequest(spanId, requestClone);
-        await this.captureFetchResponse(spanId, responseClone);
+        try {
+          responseClone = response.clone();
+        } catch (error) {
+          debugLog("Fetch response capture clone failed", {
+            spanId,
+            errorName: error instanceof Error ? error.name : typeof error,
+          });
+        }
+
+        if (requestClone) {
+          try {
+            await this.captureFetchRequest(spanId, requestClone);
+          } catch (error) {
+            debugLog("Fetch request capture failed", {
+              spanId,
+              errorName: error instanceof Error ? error.name : typeof error,
+            });
+          }
+        }
+
+        if (responseClone) {
+          try {
+            await this.captureFetchResponse(spanId, responseClone);
+          } catch (error) {
+            debugLog("Fetch response capture failed", {
+              spanId,
+              errorName: error instanceof Error ? error.name : typeof error,
+            });
+          }
+        }
 
         return response;
       });
