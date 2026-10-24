@@ -14,6 +14,7 @@ import { MySQL2Instrumentation } from "@opentelemetry/instrumentation-mysql2";
 import { IORedisInstrumentation } from "@opentelemetry/instrumentation-ioredis";
 import { register } from "node:module";
 import { pathToFileURL } from "node:url";
+import RedactionService from "../security/redaction.service";
 
 const esmHookRegistered = Symbol.for("server-devtools.opentelemetry.esm-hook-registered");
 const processState = process as typeof process & { [esmHookRegistered]?: boolean };
@@ -24,14 +25,17 @@ export class Instrumentation {
     private isShutdown = false;
 
     constructor(
-        private readonly storage: SQLiteStorage
+        private readonly storage: SQLiteStorage,
+        redactionService: RedactionService,
     ) {
         this.outboundHttpCapture =
-            new OutboundHttpCapture(storage);
+            new OutboundHttpCapture(storage, redactionService);
 
         this.oTelSdk = new NodeSDK({
             spanProcessors: [
-                new SimpleSpanProcessor(new ServerDevToolsExporter(this.storage)),
+                new SimpleSpanProcessor(
+                    new ServerDevToolsExporter(this.storage, redactionService),
+                ),
             ],
             instrumentations: [
                 new HttpInstrumentation(

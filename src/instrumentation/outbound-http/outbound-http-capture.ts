@@ -7,6 +7,7 @@ import {
   FetchCaptureContext,
   NativeBodyCaptureState,
 } from "../../types/outbound-http";
+import RedactionService from "../../security/redaction.service";
 
 function captureNativeBodyChunk(
   state: NativeBodyCaptureState,
@@ -42,13 +43,17 @@ function captureNativeBodyChunk(
 export class OutboundHttpCapture {
   private readonly fetchContext =
     new AsyncLocalStorage<FetchCaptureContext>();
+  private readonly redactionService: RedactionService;
 
   private originalFetch?: typeof globalThis.fetch;
   private fetchWrapper?: typeof globalThis.fetch;
 
   constructor(
     private readonly storage: SQLiteStorage,
-  ) { }
+    redactionService: RedactionService,
+  ) {
+    this.redactionService = redactionService;
+  }
 
   trackNativeRequest(
     spanId: string,
@@ -79,9 +84,9 @@ export class OutboundHttpCapture {
     spanId: string,
     request: ClientRequest,
   ): void {
-    const headers = this.normalizeHeaders(
+    const headers = this.redactHeaders(this.normalizeHeaders(
       request.getHeaders(),
-    );
+    ));
 
     try {
       this.storage.updateHttpClientDetails(spanId, {
@@ -149,9 +154,9 @@ export class OutboundHttpCapture {
     spanId: string,
     response: IncomingMessage,
   ): void {
-    const headers = this.normalizeHeaders(
+    const headers = this.redactHeaders(this.normalizeHeaders(
       response.headers,
-    );
+    ));
 
     try {
       this.storage.updateHttpClientDetails(spanId, {
@@ -359,9 +364,9 @@ export class OutboundHttpCapture {
     spanId: string,
     request: Request,
   ): Promise<void> {
-    const requestHeaders = this.normalizeFetchHeaders(
+    const requestHeaders = this.redactHeaders(this.normalizeFetchHeaders(
       request.headers,
-    );
+    ));
 
     let requestBody: unknown;
 
@@ -392,9 +397,9 @@ export class OutboundHttpCapture {
     spanId: string,
     response: Response,
   ): Promise<void> {
-    const responseHeaders = this.normalizeFetchHeaders(
+    const responseHeaders = this.redactHeaders(this.normalizeFetchHeaders(
       response.headers,
-    );
+    ));
 
     let responseBody: unknown;
 
@@ -434,5 +439,14 @@ export class OutboundHttpCapture {
     });
 
     return result;
+  }
+
+  private redactHeaders(
+    headers: Record<string, string | string[]>,
+  ): Record<string, string | string[]> {
+    return this.redactionService.redactData(headers) as Record<
+      string,
+      string | string[]
+    >;
   }
 }

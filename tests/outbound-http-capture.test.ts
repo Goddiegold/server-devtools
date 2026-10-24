@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { createServer, request as httpRequest, type Server } from "node:http";
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type Server,
+} from "node:http";
 
 import SQLiteStorage from "../src/storage/sqlite-storage";
 import { OutboundHttpCapture } from "../src/instrumentation/outbound-http/outbound-http-capture";
+import Config from "../src/config";
+import RedactionService from "../src/security/redaction.service";
+
+function createRedactionService(): RedactionService {
+  return new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES);
+}
 
 function createStorage(t: TestContext): SQLiteStorage {
   const storage = new SQLiteStorage(":memory:");
@@ -78,7 +89,7 @@ test("native HTTP capture records headers and complete chunked bodies without co
   });
   closeServer(t, server);
   const baseUrl = await startServer(server);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const request = httpRequest(`${baseUrl}/native`, {
     method: "POST",
     headers: {
@@ -120,6 +131,62 @@ test("native HTTP capture records headers and complete chunked bodies without co
   assert.deepEqual(details?.responseBody, { received: "by-app" });
 });
 
+test("native HTTP header capture redacts stored secrets without changing traffic", async (t) => {
+  const storage = createStorage(t);
+  const server = createServer((request, response) => {
+    assert.equal(request.headers.authorization, "native-authorization-secret");
+    assert.equal(request.headers.cookie, "native-cookie-secret");
+    assert.equal(request.headers["x-api-key"], "native-api-secret");
+    assert.equal(request.headers["x-visible-request"], "visible-request");
+
+    response.writeHead(200, {
+      "set-cookie": ["native-cookie-a", "native-cookie-b"],
+      "x-api-key": "native-response-secret",
+      "x-visible-response": "visible-response",
+    });
+    response.end("native response");
+  });
+  closeServer(t, server);
+  const baseUrl = await startServer(server);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const request = httpRequest(`${baseUrl}/native-headers`, {
+    headers: {
+      authorization: "native-authorization-secret",
+      cookie: "native-cookie-secret",
+      "x-api-key": "native-api-secret",
+      "x-visible-request": "visible-request",
+    },
+  });
+  capture.trackNativeRequest("native-header-span", request);
+
+  const responseReceived = new Promise<IncomingMessage>((resolve, reject) => {
+    request.once("response", (response) => {
+      capture.trackNativeResponse("native-header-span", response);
+      response.resume();
+      response.once("end", () => resolve(response));
+    });
+    request.once("error", reject);
+  });
+  request.end();
+  const response = await responseReceived;
+
+  assert.deepEqual(response.headers["set-cookie"], [
+    "native-cookie-a",
+    "native-cookie-b",
+  ]);
+  assert.equal(response.headers["x-api-key"], "native-response-secret");
+  assert.equal(response.headers["x-visible-response"], "visible-response");
+
+  const details = storage.getHttpClientDetails("native-header-span");
+  assert.equal(details?.requestHeaders?.authorization, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.cookie, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-visible-request"], "visible-request");
+  assert.equal(details?.responseHeaders?.["set-cookie"], "[REDACTED]");
+  assert.equal(details?.responseHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.responseHeaders?.["x-visible-response"], "visible-response");
+});
+
 test("native HTTP capture limits request and response bodies without changing stream bytes", async (t) => {
   const storage = createStorage(t);
   const bodyLimit = 256 * 1024;
@@ -143,7 +210,7 @@ test("native HTTP capture limits request and response bodies without changing st
   });
   closeServer(t, server);
   const baseUrl = await startServer(server);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
 
   for (const testCase of cases) {
     const request = httpRequest(`${baseUrl}/${testCase.name}`, {
@@ -204,7 +271,7 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   });
   closeServer(t, server);
   const baseUrl = await startServer(server);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const originalFetch = globalThis.fetch;
   const spanByPath: Record<string, string> = {
     "/json-a": "fetch-span-a",
@@ -264,9 +331,56 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   assert.equal(emptyDetails?.responseBody, undefined);
 });
 
+test("fetch header capture redacts stored secrets without changing traffic", async (t) => {
+  const storage = createStorage(t);
+  const server = createServer((request, response) => {
+    assert.equal(request.headers.authorization, "fetch-authorization-secret");
+    assert.equal(request.headers.cookie, "fetch-cookie-secret");
+    assert.equal(request.headers["x-api-key"], "fetch-api-secret");
+    assert.equal(request.headers["x-visible-request"], "visible-request");
+    response.writeHead(200, {
+      "x-api-key": "fetch-response-secret",
+      "x-visible-response": "visible-response",
+    });
+    response.end("fetch response");
+  });
+  closeServer(t, server);
+  const baseUrl = await startServer(server);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const request = new Request(input, init);
+    capture.associateFetchSpan("fetch-header-span");
+    return originalFetch(request);
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await globalThis.fetch(`${baseUrl}/fetch-headers`, {
+    headers: {
+      authorization: "fetch-authorization-secret",
+      cookie: "fetch-cookie-secret",
+      "x-api-key": "fetch-api-secret",
+      "x-visible-request": "visible-request",
+    },
+  });
+
+  assert.equal(response.headers.get("x-api-key"), "fetch-response-secret");
+  assert.equal(response.headers.get("x-visible-response"), "visible-response");
+  assert.equal(await response.text(), "fetch response");
+
+  const details = storage.getHttpClientDetails("fetch-header-span");
+  assert.equal(details?.requestHeaders?.authorization, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.cookie, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-visible-request"], "visible-request");
+  assert.equal(details?.responseHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.responseHeaders?.["x-visible-response"], "visible-response");
+});
+
 test("fetch capture errors do not reject or consume a successful response", async (t) => {
   const storage = createStorage(t);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const originalFetch = globalThis.fetch;
   const applicationResponse = new Response("application response");
 
@@ -290,7 +404,7 @@ test("fetch capture errors do not reject or consume a successful response", asyn
 
 test("stopping fetch capture is safe before startup and restores the original fetch", (t) => {
   const storage = createStorage(t);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const originalFetch = globalThis.fetch;
 
   capture.stopFetchCapture();

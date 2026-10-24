@@ -10,6 +10,12 @@ import module from "node:module";
 import ServerDevTools from "../src/index";
 import { Instrumentation } from "../src/instrumentation/instrumentation";
 import SQLiteStorage from "../src/storage/sqlite-storage";
+import Config from "../src/config";
+import RedactionService from "../src/security/redaction.service";
+
+function createRedactionService(): RedactionService {
+  return new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES);
+}
 
 test("startup shares ESM hook registration before OpenTelemetry starts", async (t) => {
   const hookKey = Symbol.for("server-devtools.opentelemetry.esm-hook-registered");
@@ -24,7 +30,10 @@ test("startup shares ESM hook registration before OpenTelemetry starts", async (
     },
   );
   const originalFetch = globalThis.fetch;
-  const instances = [0, 1].map(() => new Instrumentation(new SQLiteStorage(":memory:")));
+  const instances = [0, 1].map(() => new Instrumentation(
+    new SQLiteStorage(":memory:"),
+    createRedactionService(),
+  ));
   t.after(async () => {
     for (const instance of instances) await instance.shutdown();
     globalThis.fetch = originalFetch;
@@ -65,7 +74,7 @@ test("constructing ServerDevTools does not wrap global fetch", (t) => {
 test("Instrumentation.start enables fetch capture", async (t) => {
   const originalFetch = globalThis.fetch;
   const storage = new SQLiteStorage(":memory:");
-  const instrumentation = new Instrumentation(storage);
+  const instrumentation = new Instrumentation(storage, createRedactionService());
   let shutDown = false;
 
   t.after(async () => {
@@ -87,7 +96,7 @@ test("Instrumentation.start enables fetch capture", async (t) => {
 
 test("Instrumentation.shutdown closes storage when OpenTelemetry shutdown fails", async () => {
   const storage = new SQLiteStorage(":memory:");
-  const instrumentation = new Instrumentation(storage);
+  const instrumentation = new Instrumentation(storage, createRedactionService());
   const shutdownError = new Error("OpenTelemetry shutdown failed");
   let storageClosed = false;
   const closeStorage = storage.close.bind(storage);

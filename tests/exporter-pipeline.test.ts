@@ -7,12 +7,15 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 
 import ServerDevToolsExporter from '../src/instrumentation/exporter';
 import SQLiteStorage from '../src/storage/sqlite-storage';
+import Config from '../src/config';
+import RedactionService from '../src/security/redaction.service';
 
 const storage = new SQLiteStorage(":memory:");
 
 
 const exporter = new ServerDevToolsExporter(
-  storage
+  storage,
+  new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES),
 );
 
 const span = {

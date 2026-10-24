@@ -9,6 +9,7 @@ import SQLiteStorage from "./storage/sqlite-storage";
 import EncryptDecryptService from "./security/encrypt-decrypt.service";
 import Config from "./config";
 import AuthService from "./security/auth.service";
+import RedactionService from "./security/redaction.service";
 import { debugLog } from "./utils/logger";
 
 class ServerDevTools {
@@ -27,6 +28,10 @@ class ServerDevTools {
                 options.encryption.fields ?? Config.DEFAULT_FIELDS_TO_ENCRYPT,
             )
             : undefined;
+        const redactionService = new RedactionService(
+            true,
+            Config.DEFAULT_SENSITIVE_HEADER_NAMES,
+        );
 
         this.storage = new SQLiteStorage(
             "./server-devtools.db",
@@ -43,7 +48,10 @@ class ServerDevTools {
 
         this.authService = new AuthService(auth.username, auth.password, this.storage)
 
-        this.instrumentation = new Instrumentation(this.storage);
+        this.instrumentation = new Instrumentation(
+            this.storage,
+            redactionService,
+        );
         this.dashboard = new DashboardServer(
             this.storage,
             this.authService
