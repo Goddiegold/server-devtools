@@ -183,13 +183,20 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     setFiltersOpen(false)
   }
 
-  function clearDraftFilters() {
+  function clearFilters() {
     setDraftMethod("")
     setDraftStatus("")
     setDraftDateRange("all")
     setDraftFrom("")
     setDraftTo("")
+    setMethod("")
+    setStatus("")
+    setDateRange("all")
+    setFrom("")
+    setTo("")
+    setPage(1)
     setFilterError(null)
+    setFiltersOpen(false)
   }
 
   function changeSort(nextSortBy: RequestsSortField) {
@@ -522,7 +529,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={clearDraftFilters}
+                      onClick={clearFilters}
                     >
                       Clear
                     </Button>
