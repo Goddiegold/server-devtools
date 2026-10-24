@@ -36,7 +36,7 @@ function formatDuration(value: number): string {
 
 function statusClass(statusCode?: number): string {
   return statusCode !== undefined && statusCode >= 500
-    ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+    ? "border-destructive/20 bg-destructive/10 text-destructive"
     : "border-border bg-muted text-muted-foreground"
 }
 

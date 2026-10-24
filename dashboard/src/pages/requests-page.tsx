@@ -37,15 +37,15 @@ function userIdentity(user: IDashboardRequest["user"]): string | undefined {
 function methodBadgeClass(method: string): string {
   switch (method.toUpperCase()) {
     case "GET":
-      return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+      return "border-info/20 bg-info/10 text-info"
     case "POST":
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      return "border-success/20 bg-success/10 text-success"
     case "PUT":
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      return "border-warning/20 bg-warning/10 text-warning"
     case "PATCH":
-      return "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+      return "border-info/20 bg-info/10 text-info"
     case "DELETE":
-      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      return "border-destructive/20 bg-destructive/10 text-destructive"
     default:
       return "border-border bg-muted text-muted-foreground"
   }
@@ -54,13 +54,13 @@ function methodBadgeClass(method: string): string {
 function statusBadgeClass(statusCode?: number): string {
   switch (statusCode === undefined ? undefined : Math.floor(statusCode / 100)) {
     case 2:
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      return "border-success/20 bg-success/10 text-success"
     case 3:
-      return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+      return "border-info/20 bg-info/10 text-info"
     case 4:
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      return "border-warning/20 bg-warning/10 text-warning"
     case 5:
-      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      return "border-destructive/20 bg-destructive/10 text-destructive"
     default:
       return "border-border bg-muted text-muted-foreground"
   }

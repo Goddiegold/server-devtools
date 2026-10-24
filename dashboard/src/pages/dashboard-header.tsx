@@ -5,6 +5,7 @@ import { ApiError } from "@/api/client"
 import { logout } from "@/api/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ThemeSelector } from "@/components/theme-selector"
 import logoUrl from "../../../assets/logo/serverdevtools-icon.svg"
 
 interface DashboardHeaderProps {
@@ -62,9 +63,11 @@ export function DashboardHeader({ onLogout, onNavigate }: DashboardHeaderProps) 
         )}
 
         <Badge variant="outline">
-          <span className="mr-2 size-2 rounded-full bg-green-500" />
+          <span className="mr-2 size-2 rounded-full bg-success" />
           LIVE
         </Badge>
+
+        <ThemeSelector />
 
         <Button
           variant="ghost"

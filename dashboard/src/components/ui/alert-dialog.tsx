@@ -21,7 +21,7 @@ export function ConfirmDialog({
   return (
     <AlertDialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialogPrimitive.Portal>
-        <AlertDialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/50" />
+        <AlertDialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-overlay" />
         <AlertDialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <AlertDialogPrimitive.Popup
             className={cn(
