@@ -402,6 +402,127 @@ test("fetch capture errors do not reject or consume a successful response", asyn
   assert.equal(await response.text(), "application response");
 });
 
+test("fetch capture limits request and response bodies without changing stream bytes", async (t) => {
+  const storage = createStorage(t);
+  const bodyLimit = 256 * 1024;
+  const cases = [
+    { name: "below", body: Buffer.from("é".repeat(1024)) },
+    { name: "exact", body: Buffer.from("😀".repeat(bodyLimit / 4)) },
+    { name: "above", body: Buffer.concat([
+      Buffer.from("é".repeat(bodyLimit / 2)),
+      Buffer.from("x"),
+    ]) },
+  ];
+  const receivedRequests = new Map<string, Buffer>();
+  const responseBodies = new Map<string, Buffer>();
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+
+  const readBody = async (body: ReadableStream<Uint8Array> | null): Promise<Buffer> => {
+    if (!body) {
+      return Buffer.alloc(0);
+    }
+
+    const reader = body.getReader();
+    const chunks: Buffer[] = [];
+    while (true) {
+      const result = await reader.read();
+      if (result.done) {
+        return Buffer.concat(chunks);
+      }
+      chunks.push(Buffer.from(result.value));
+    }
+  };
+
+  const chunked = (body: Buffer): ReadableStream<Uint8Array> => {
+    let offset = 0;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset >= body.length) {
+          controller.close();
+          return;
+        }
+        const end = Math.min(offset + 8192, body.length);
+        controller.enqueue(new Uint8Array(body.subarray(offset, end)));
+        offset = end;
+      },
+    });
+  };
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const name = new URL(request.url).pathname.slice(1);
+    capture.associateFetchSpan(`fetch-limit-${name}`);
+    const received = await readBody(request.body);
+    receivedRequests.set(name, received);
+    const responseBody = cases.find(testCase => testCase.name === name)?.body ?? Buffer.alloc(0);
+    responseBodies.set(name, responseBody);
+    return new Response(chunked(responseBody), {
+      headers: { "content-type": "text/plain" },
+    });
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  for (const testCase of cases) {
+    const response = await globalThis.fetch(`http://example.test/${testCase.name}`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: chunked(testCase.body),
+      duplex: "half",
+    } as RequestInit);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), responseBodies.get(testCase.name));
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 25));
+
+  for (const testCase of cases) {
+    assert.deepEqual(receivedRequests.get(testCase.name), testCase.body);
+    const details = storage.getHttpClientDetails(`fetch-limit-${testCase.name}`);
+    if (testCase.body.length <= bodyLimit) {
+      assert.equal(details?.requestBody, testCase.body.toString("utf8"));
+      assert.equal(details?.responseBody, testCase.body.toString("utf8"));
+    } else {
+      assert.equal(details?.requestBody, undefined);
+      assert.equal(details?.responseBody, undefined);
+    }
+  }
+});
+
+test("fetch returns the original response before a slow capture clone finishes", async (t) => {
+  const storage = createStorage(t);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+  let releaseCapture!: () => void;
+  const captureReleased = new Promise<void>(resolve => {
+    releaseCapture = resolve;
+  });
+
+  globalThis.fetch = (async () => {
+    capture.associateFetchSpan("fetch-slow-span");
+    return new Response(new ReadableStream<Uint8Array>({
+      async start(controller) {
+        await captureReleased;
+        controller.enqueue(new TextEncoder().encode("slow response"));
+        controller.close();
+      },
+    }));
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => {
+    releaseCapture();
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await Promise.race([
+    globalThis.fetch("http://example.test/slow"),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("fetch waited for capture")), 100)),
+  ]);
+
+  releaseCapture();
+  assert.equal(await response.text(), "slow response");
+});
+
 test("stopping fetch capture is safe before startup and restores the original fetch", (t) => {
   const storage = createStorage(t);
   const capture = new OutboundHttpCapture(storage, createRedactionService());

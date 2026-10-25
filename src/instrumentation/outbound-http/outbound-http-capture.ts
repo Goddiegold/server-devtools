@@ -47,6 +47,7 @@ export class OutboundHttpCapture {
 
   private originalFetch?: typeof globalThis.fetch;
   private fetchWrapper?: typeof globalThis.fetch;
+  private readonly pendingFetchCaptures = new Set<Promise<void>>();
 
   constructor(
     private readonly storage: SQLiteStorage,
@@ -305,27 +306,21 @@ export class OutboundHttpCapture {
           });
         }
 
-        if (requestClone) {
-          try {
-            await this.captureFetchRequest(spanId, requestClone);
-          } catch (error) {
-            debugLog("Fetch request capture failed", {
-              spanId,
-              errorName: error instanceof Error ? error.name : typeof error,
-            });
-          }
-        }
-
-        if (responseClone) {
-          try {
-            await this.captureFetchResponse(spanId, responseClone);
-          } catch (error) {
-            debugLog("Fetch response capture failed", {
-              spanId,
-              errorName: error instanceof Error ? error.name : typeof error,
-            });
-          }
-        }
+        const capture = this.captureFetchDetails(
+          spanId,
+          requestClone,
+          responseClone,
+        ).catch((error) => {
+          debugLog("Fetch capture failed", {
+            spanId,
+            errorName: error instanceof Error ? error.name : typeof error,
+          });
+        });
+        this.pendingFetchCaptures.add(capture);
+        void capture.then(
+          () => this.pendingFetchCaptures.delete(capture),
+          () => this.pendingFetchCaptures.delete(capture),
+        );
 
         return response;
       });
@@ -346,6 +341,12 @@ export class OutboundHttpCapture {
 
     this.originalFetch = undefined;
     this.fetchWrapper = undefined;
+  }
+
+  async waitForPendingFetchCaptures(): Promise<void> {
+    while (this.pendingFetchCaptures.size > 0) {
+      await Promise.allSettled([...this.pendingFetchCaptures]);
+    }
   }
 
   associateFetchSpan(spanId: string): void {
@@ -370,22 +371,36 @@ export class OutboundHttpCapture {
 
     let requestBody: unknown;
 
-    if (request.body) {
-      const body = await request.text();
+    try {
+      this.storage.updateHttpClientDetails(spanId, {
+        requestHeaders,
+      });
+    } catch (error) {
+      debugLog("Fetch request capture failed", {
+        spanId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+
+    if (!request.body) {
+      debugLog("Fetch request details captured", { spanId });
+      return;
+    }
+
+    try {
+      const body = await this.readFetchBody(request.body);
+
+      if (body === undefined) {
+        return;
+      }
 
       requestBody = this.parseBody(
         body,
         request.headers.get("content-type"),
       );
-    }
-
-    try {
-      this.storage.updateHttpClientDetails(spanId, {
-        requestHeaders,
-        requestBody,
-      });
+      this.storage.updateHttpClientDetails(spanId, { requestBody });
     } catch (error) {
-      debugLog("Fetch request capture failed", {
+      debugLog("Fetch request body capture failed", {
         spanId,
         errorName: error instanceof Error ? error.name : typeof error,
       });
@@ -403,22 +418,39 @@ export class OutboundHttpCapture {
 
     let responseBody: unknown;
 
-    if (response.body) {
-      const body = await response.text();
+    try {
+      this.storage.updateHttpClientDetails(spanId, {
+        responseHeaders,
+      });
+    } catch (error) {
+      debugLog("Fetch response capture failed", {
+        spanId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    }
+
+    if (!response.body) {
+      debugLog("Fetch response details captured", {
+        spanId,
+        statusCode: response.status,
+      });
+      return;
+    }
+
+    try {
+      const body = await this.readFetchBody(response.body);
+
+      if (body === undefined) {
+        return;
+      }
 
       responseBody = this.parseBody(
         body,
         response.headers.get("content-type"),
       );
-    }
-
-    try {
-      this.storage.updateHttpClientDetails(spanId, {
-        responseHeaders,
-        responseBody,
-      });
+      this.storage.updateHttpClientDetails(spanId, { responseBody });
     } catch (error) {
-      debugLog("Fetch response capture failed", {
+      debugLog("Fetch response body capture failed", {
         spanId,
         errorName: error instanceof Error ? error.name : typeof error,
       });
@@ -427,6 +459,51 @@ export class OutboundHttpCapture {
       spanId,
       statusCode: response.status,
     });
+  }
+
+  private async captureFetchDetails(
+    spanId: string,
+    request: Request | undefined,
+    response: Response | undefined,
+  ): Promise<void> {
+    if (request) {
+      await this.captureFetchRequest(spanId, request);
+    }
+
+    if (response) {
+      await this.captureFetchResponse(spanId, response);
+    }
+  }
+
+  private async readFetchBody(
+    body: ReadableStream<Uint8Array>,
+  ): Promise<Buffer | undefined> {
+    const reader = body.getReader();
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+
+    try {
+      while (true) {
+        const result = await reader.read();
+
+        if (result.done) {
+          return Buffer.concat(chunks, bytes);
+        }
+
+        const chunk = Buffer.from(result.value);
+        bytes += chunk.length;
+
+        if (bytes > Config.NATIVE_HTTP_BODY_LIMIT_BYTES) {
+          chunks.length = 0;
+          void reader.cancel().catch(() => undefined);
+          return undefined;
+        }
+
+        chunks.push(chunk);
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   private normalizeFetchHeaders(
