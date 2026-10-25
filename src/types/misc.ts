@@ -18,6 +18,9 @@ export interface IDevToolsCurrentUser {
 }
 
 export interface IServerDevlToolsParams {
+    redaction?: {
+        additionalHeaders?: string[];
+    },
     encryption?: {
         key: string,
         fields?: string[]

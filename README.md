@@ -121,6 +121,20 @@ encryption: {
 },
 ```
 
+HTTP header redaction is enabled by default for sensitive header names such
+as `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, and
+`x-api-key`. Add application-specific header names without replacing the
+defaults:
+
+```ts
+redaction: {
+  additionalHeaders: ["x-access-token", "client-secret"],
+},
+```
+
+Header redaction applies to header names only. It does not redact body fields,
+URLs, query parameters, or arbitrary span attributes.
+
 `getCurrentUser` is optional. Use it when your application already exposes the
 authenticated user on the request; ServerDevTools does not require a
 Passport, JWT, or other authentication framework.
@@ -541,7 +555,9 @@ captured data. It does not redact all captured data or replace application
 security practices. The dashboard has authentication; use strong credentials
 and restrict access to `/_devtools` through your network and deployment setup.
 
-Automatic redaction and capture-size limits are not currently implemented.
+Header-name redaction is available for configured HTTP headers, but body,
+URL, query-parameter, and arbitrary span-attribute redaction are not
+implemented. Capture-size limits apply only where documented by the SDK.
 
 ------------------------------------------------------------------------
 

@@ -30,7 +30,10 @@ class ServerDevTools {
             : undefined;
         const redactionService = new RedactionService(
             true,
-            Config.DEFAULT_SENSITIVE_HEADER_NAMES,
+            [
+                ...Config.DEFAULT_SENSITIVE_HEADER_NAMES,
+                ...(options.redaction?.additionalHeaders ?? []),
+            ],
         );
 
         this.storage = new SQLiteStorage(

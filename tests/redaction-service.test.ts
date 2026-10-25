@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import Config from "../src/config";
 import RedactionService from "../src/security/redaction.service";
 
 test("disabled redaction returns the original input", () => {
@@ -67,4 +68,41 @@ test("redacts nested objects and arrays without changing other values", () => {
     },
   });
   assert.deepEqual(input, before);
+});
+
+test("custom headers extend defaults and normalize names", () => {
+  const service = new RedactionService(true, [
+    ...Config.DEFAULT_SENSITIVE_HEADER_NAMES,
+    " x-access-token ",
+    "X-ACCESS-TOKEN",
+    " client-secret ",
+  ]);
+  const input = {
+    Authorization: "default-secret",
+    "X-Access-Token": "custom-secret",
+    "CLIENT-SECRET": "another-custom-secret",
+  };
+
+  assert.deepEqual(service.redactData(input), {
+    Authorization: "[REDACTED]",
+    "X-Access-Token": "[REDACTED]",
+    "CLIENT-SECRET": "[REDACTED]",
+  });
+  assert.deepEqual(input, {
+    Authorization: "default-secret",
+    "X-Access-Token": "custom-secret",
+    "CLIENT-SECRET": "another-custom-secret",
+  });
+});
+
+test("omitting additional headers preserves the default behavior", () => {
+  const service = new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES);
+
+  assert.deepEqual(service.redactData({
+    authorization: "default-secret",
+    "x-access-token": "not-configured",
+  }), {
+    authorization: "[REDACTED]",
+    "x-access-token": "not-configured",
+  });
 });

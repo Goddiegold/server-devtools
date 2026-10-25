@@ -12,7 +12,9 @@ class RedactionService {
     ) {
         this.allowRedacting = allowRedacting
         this.redactFields = new Set(
-            redactFields.map(field => field?.toLowerCase())
+            redactFields
+                .map(field => field?.trim().toLowerCase())
+                .filter(Boolean)
         );
     }
 
