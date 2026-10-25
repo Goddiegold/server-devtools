@@ -238,6 +238,23 @@ The installed OpenTelemetry hook exports asynchronous loader hooks, which requir
 OpenTelemetry's `hook.mjs`. This compatibility requirement does not change the
 startup command or configuration.
 
+### Why is initialization asynchronous?
+
+`await devtools.start()` waits for the instrumentation startup contract. In the
+currently installed OpenTelemetry SDK, `NodeSDK.start()` performs registration
+synchronously; ServerDevTools then enables fetch capture before `start()`
+resolves. The async API keeps startup compatible with instrumentation work that
+may need to become asynchronous without changing application setup. It does not
+wait for application requests, database connections, or an external telemetry
+service.
+
+Call it from the preload module before importing application dependencies. The
+instrumentations patch supported HTTP, framework, database, Redis, and Undici
+modules as they load, so modules imported first cannot be instrumented
+retroactively. Preloading adds startup work and startup failures can prevent the
+application from starting, but it ensures capture is installed before traffic
+begins.
+
 The application can import the same instance normally and mount it in Express:
 
 ```ts
