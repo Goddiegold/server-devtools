@@ -7,13 +7,16 @@ import { DashboardHeader } from "@/pages/dashboard-header"
 import { LoginPage } from "@/pages/login-page"
 import { RequestsPage } from "@/pages/requests-page"
 import { TraceDetailsPage } from "@/pages/trace-details-page"
+import { OverviewPage } from "@/pages/overview-page"
 
-const REQUESTS_PATH = "/_devtools"
+const OVERVIEW_PATH = "/_devtools"
+const REQUESTS_PATH = "/_devtools/requests"
 const LOGIN_PATH = "/login"
-const TRACE_PATH_PREFIX = `${REQUESTS_PATH}/traces/`
+const TRACE_PATH_PREFIX = "/_devtools/traces/"
 
 type DashboardRoute =
   | { kind: "login" }
+  | { kind: "overview" }
   | { kind: "requests" }
   | { kind: "trace"; traceId: string }
   | { kind: "not-found" }
@@ -21,6 +24,10 @@ type DashboardRoute =
 function parseRoute(pathname: string): DashboardRoute {
   if (pathname === LOGIN_PATH || pathname === `${LOGIN_PATH}/`) {
     return { kind: "login" }
+  }
+
+  if (pathname === OVERVIEW_PATH || pathname === `${OVERVIEW_PATH}/`) {
+    return { kind: "overview" }
   }
 
   if (pathname === REQUESTS_PATH || pathname === `${REQUESTS_PATH}/`) {
@@ -65,7 +72,7 @@ function App() {
           setAuthState("authenticated")
 
           if (parseRoute(window.location.pathname).kind === "login") {
-            navigate(REQUESTS_PATH)
+            navigate(OVERVIEW_PATH)
           }
         }
       })
@@ -101,7 +108,7 @@ function App() {
 
   function handleLoginSuccess() {
     setAuthState("authenticated")
-    navigate(REQUESTS_PATH)
+    navigate(OVERVIEW_PATH)
   }
 
   function handleLogout() {
@@ -123,7 +130,13 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {route.kind !== "login" && <DashboardHeader onLogout={handleLogout} />}
+      {route.kind !== "login" && (
+        <DashboardHeader onLogout={handleLogout} onNavigate={navigate} />
+      )}
+
+      {route.kind === "overview" && (
+        <OverviewPage onSelectRequest={selectRequest} />
+      )}
 
       {route.kind === "requests" && (
         <RequestsPage onSelectRequest={selectRequest} />

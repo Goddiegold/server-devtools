@@ -4,3 +4,10 @@ dist/
 .env    
 # *.sh
 *.pdf
+
+# Local runtime data and generated package archives
+/server-devtools.db
+/server-devtools.db-*
+/cookies.txt
+/server-devtools-*.tgz
+/commands.sh

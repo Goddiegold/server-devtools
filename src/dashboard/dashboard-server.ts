@@ -3,7 +3,10 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import Config from "../config";
 import ExecutionTreeBuilder from "../core/execution-tree-builder";
-import SQLiteStorage from "../storage/sqlite-storage";
+import SQLiteStorage, {
+    type TraceSummarySortDirection,
+    type TraceSummarySortField,
+} from "../storage/sqlite-storage";
 import DashboardErrorMapper from "./dashboard-errors-mapper";
 import DashboardRequestDetailMapper from "./dashboard-request-detail-mapper";
 import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
@@ -708,6 +711,40 @@ export default class DashboardServer {
 
         if (
             req.method === Config.REQUEST_METHOD.GET &&
+            pathname === Config.DASHBOARD_API_ROUTES.OVERVIEW
+        ) {
+            res.setHeader("Cache-Control", "no-store");
+            const searchParams = new URL(requestUrl, "http://localhost").searchParams;
+            const requestedRange = searchParams.get("range") ?? "1h";
+            const validRanges = ["15m", "1h", "6h", "24h"] as const;
+
+            if (!(validRanges as readonly string[]).includes(requestedRange)) {
+                res.statusCode = 400;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({
+                    message: "Range must be one of 15m, 1h, 6h, or 24h",
+                }));
+                return;
+            }
+
+            try {
+                const overview = this.storage.getOverview(requestedRange as typeof validRanges[number]);
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify(overview));
+            } catch (error) {
+                debugLog("Overview lookup failed", {
+                    errorName: error instanceof Error ? error.name : typeof error,
+                });
+                res.statusCode = 500;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ message: "Unable to read overview" }));
+            }
+            return;
+        }
+
+        if (
+            req.method === Config.REQUEST_METHOD.GET &&
             pathname === Config.DASHBOARD_API_ROUTES.REQUESTS) {
             const searchParams = new URL(requestUrl, "http://localhost").searchParams;
             const parsePositiveInteger = (name: string, fallback: number) => {
@@ -730,6 +767,42 @@ export default class DashboardServer {
             const search = searchParams.get("search") ?? "";
             const method = searchParams.get("method")?.trim().toUpperCase() || undefined;
             const statusValue = searchParams.get("status");
+            const parseTimestamp = (name: string) => {
+                const value = searchParams.get(name);
+                if (value === null || value === "") {
+                    return undefined;
+                }
+
+                if (!/^\d+$/.test(value)) {
+                    return undefined;
+                }
+
+                const parsed = Number(value);
+                return Number.isSafeInteger(parsed) ? parsed : undefined;
+            };
+            const fromValue = searchParams.get("from");
+            const toValue = searchParams.get("to");
+            const startedAtFrom = parseTimestamp("from");
+            const startedAtTo = parseTimestamp("to");
+            const sortByValue = searchParams.get("sortBy");
+            const sortDirectionValue = searchParams.get("sortDirection");
+            const sortFields: TraceSummarySortField[] = [
+                "startedAt",
+                "durationMs",
+                "statusCode",
+                "method",
+                "path",
+            ];
+            const sortField = sortByValue === null || sortByValue === ""
+                ? "startedAt"
+                : sortFields.includes(sortByValue as TraceSummarySortField)
+                    ? sortByValue as TraceSummarySortField
+                    : undefined;
+            const sortDirection = sortDirectionValue === null || sortDirectionValue === ""
+                ? "desc"
+                : sortDirectionValue === "asc" || sortDirectionValue === "desc"
+                    ? sortDirectionValue as TraceSummarySortDirection
+                    : undefined;
             const statusCode = statusValue === null || statusValue === ""
                 ? undefined
                 : /^\d+$/.test(statusValue)
@@ -741,12 +814,17 @@ export default class DashboardServer {
                 limit === undefined ||
                 limit > 100 ||
                 (statusValue !== null && statusValue !== "" &&
-                    (statusCode === undefined || statusCode < 100 || statusCode > 599))
+                    (statusCode === undefined || statusCode < 100 || statusCode > 599)) ||
+                (fromValue !== null && fromValue !== "" && startedAtFrom === undefined) ||
+                (toValue !== null && toValue !== "" && startedAtTo === undefined) ||
+                (startedAtFrom !== undefined && startedAtTo !== undefined && startedAtFrom > startedAtTo) ||
+                sortField === undefined ||
+                sortDirection === undefined
             ) {
                 res.statusCode = 400;
                 res.setHeader("Content-Type", "application/json");
                 res.end(JSON.stringify({
-                    message: "Page must be a positive integer and limit must be between 1 and 100",
+                    message: "Page, date filters, and sorting must be valid, limit must be between 1 and 100, and from must not be after to",
                 }));
                 return;
             }
@@ -769,6 +847,10 @@ export default class DashboardServer {
                     search,
                     method,
                     statusCode,
+                    startedAtFrom,
+                    startedAtTo,
+                    sortField,
+                    sortDirection,
                 );
             } catch (error) {
                 debugLog("Trace summary lookup failed", {
@@ -834,6 +916,17 @@ export default class DashboardServer {
                 res.end(content);
                 return;
             } catch {
+                if (path.extname(relativePath) === "") {
+                    try {
+                        const content = readFileSync(path.join(dashboardDirectory, "index.html"));
+                        res.statusCode = 200;
+                        res.setHeader("Content-Type", contentTypes[".html"]);
+                        res.end(content);
+                        return;
+                    } catch {
+                        // Fall through to the normal 404 response.
+                    }
+                }
                 res.statusCode = 404;
                 res.end("Not Found");
                 return;

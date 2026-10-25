@@ -6,6 +6,7 @@ export default {
     DASHBOARD_API_ROUTES: {
         TRACES: '/_devtools/api/traces',
         REQUESTS: '/_devtools/api/requests',
+        OVERVIEW: '/_devtools/api/overview',
         AUTH: '/_devtools/api/auth'
     },
     REQUEST_METHOD: {
@@ -22,7 +23,16 @@ export default {
         "authorization",
         "cookie",
     ],
+    DEFAULT_SENSITIVE_HEADER_NAMES: [
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "set-cookie",
+        "x-api-key",
+    ],
+    NATIVE_HTTP_BODY_LIMIT_BYTES: 256 * 1024,
     STORAGE: {
         SCHEMA_VERSION: 1
-    }
+    },
+    REDACTED_KEY: "[REDACTED]"
 }

@@ -5,6 +5,7 @@ import { ApiError } from "@/api/client"
 import { login } from "@/api/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ThemeSelector } from "@/components/theme-selector"
 import logoUrl from "../../../assets/logo/serverdevtools-icon.svg"
 
 interface LoginPageProps {
@@ -48,6 +49,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <div className="mb-7 flex items-center justify-center gap-2.5">
           <img className="size-9" src={logoUrl} alt="" />
           <span className="text-lg font-semibold tracking-tight">ServerDevTools</span>
+        </div>
+
+        <div className="mb-3 flex justify-end">
+          <ThemeSelector />
         </div>
 
         <div className="rounded-xl border bg-background p-6 shadow-sm sm:p-8">

@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react"
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { clearHistory, deleteTrace } from "@/api/traces"
-import { getRequests, type IRequestsPagination } from "@/api/requests"
+import {
+  getRequests,
+  type IRequestsPagination,
+  type RequestsSortDirection,
+  type RequestsSortField,
+} from "@/api/requests"
 import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import type { IDashboardRequest } from "@/types"
-import { Loader2, Trash2, X } from "lucide-react"
+import { ArrowDownUp, ChevronDown, ChevronUp, Filter, Loader2, Search, Trash2, X } from "lucide-react"
 
 interface RequestsPageProps {
   onSelectRequest: (request: IDashboardRequest) => void
@@ -31,15 +38,15 @@ function userIdentity(user: IDashboardRequest["user"]): string | undefined {
 function methodBadgeClass(method: string): string {
   switch (method.toUpperCase()) {
     case "GET":
-      return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+      return "border-info/20 bg-info/10 text-info"
     case "POST":
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      return "border-success/20 bg-success/10 text-success"
     case "PUT":
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      return "border-warning/20 bg-warning/10 text-warning"
     case "PATCH":
-      return "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+      return "border-info/20 bg-info/10 text-info"
     case "DELETE":
-      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      return "border-destructive/20 bg-destructive/10 text-destructive"
     default:
       return "border-border bg-muted text-muted-foreground"
   }
@@ -48,15 +55,65 @@ function methodBadgeClass(method: string): string {
 function statusBadgeClass(statusCode?: number): string {
   switch (statusCode === undefined ? undefined : Math.floor(statusCode / 100)) {
     case 2:
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      return "border-success/20 bg-success/10 text-success"
     case 3:
-      return "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+      return "border-info/20 bg-info/10 text-info"
     case 4:
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      return "border-warning/20 bg-warning/10 text-warning"
     case 5:
-      return "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      return "border-destructive/20 bg-destructive/10 text-destructive"
     default:
       return "border-border bg-muted text-muted-foreground"
+  }
+}
+
+function dateInputToTimestamp(value: string): number | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : undefined
+}
+
+type DateRangePreset = "all" | "15m" | "1h" | "24h" | "7d" | "custom"
+
+const dateRangeOptions: Array<{ value: DateRangePreset; label: string }> = [
+  { value: "all", label: "All time" },
+  { value: "15m", label: "Last 15 minutes" },
+  { value: "1h", label: "Last hour" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "custom", label: "Custom" },
+]
+
+function getDateRangeBounds(
+  preset: DateRangePreset,
+  from: string,
+  to: string,
+  now: number,
+): { from?: number; to?: number } {
+  if (preset === "custom") {
+    return {
+      from: dateInputToTimestamp(from),
+      to: dateInputToTimestamp(to),
+    }
+  }
+
+  if (preset === "all") {
+    return {}
+  }
+
+  const durations: Record<Exclude<DateRangePreset, "all" | "custom">, number> = {
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "24h": 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+  }
+
+  return {
+    from: now - durations[preset],
+    to: now,
   }
 }
 
@@ -66,6 +123,18 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [search, setSearch] = useState("")
   const [method, setMethod] = useState("")
   const [status, setStatus] = useState("")
+  const [sortBy, setSortBy] = useState<RequestsSortField>("startedAt")
+  const [sortDirection, setSortDirection] = useState<RequestsSortDirection>("desc")
+  const [dateRange, setDateRange] = useState<DateRangePreset>("all")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [draftMethod, setDraftMethod] = useState("")
+  const [draftStatus, setDraftStatus] = useState("")
+  const [draftDateRange, setDraftDateRange] = useState<DateRangePreset>("all")
+  const [draftFrom, setDraftFrom] = useState("")
+  const [draftTo, setDraftTo] = useState("")
+  const [filterError, setFilterError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +142,91 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [deletingTraceId, setDeletingTraceId] = useState<string | null>(null)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearingHistory, setClearingHistory] = useState(false)
+
+  const activeFilterCount =
+    Number(Boolean(method)) +
+    Number(Boolean(status)) +
+    Number(dateRange !== "all")
+
+  function openFilters() {
+    setDraftMethod(method)
+    setDraftStatus(status)
+    setDraftDateRange(dateRange)
+    setDraftFrom(from)
+    setDraftTo(to)
+    setFilterError(null)
+    setFiltersOpen(true)
+  }
+
+  function applyFilters() {
+    const fromTimestamp = dateInputToTimestamp(draftFrom)
+    const toTimestamp = dateInputToTimestamp(draftTo)
+
+    if (
+      draftDateRange === "custom" &&
+      draftFrom &&
+      draftTo &&
+      fromTimestamp !== undefined &&
+      toTimestamp !== undefined &&
+      fromTimestamp > toTimestamp
+    ) {
+      setFilterError("From must be earlier than or equal to To.")
+      return
+    }
+
+    setMethod(draftMethod)
+    setStatus(draftStatus)
+    setDateRange(draftDateRange)
+    setFrom(draftDateRange === "custom" ? draftFrom : "")
+    setTo(draftDateRange === "custom" ? draftTo : "")
+    setPage(1)
+    setFilterError(null)
+    setFiltersOpen(false)
+  }
+
+  function clearFilters() {
+    setDraftMethod("")
+    setDraftStatus("")
+    setDraftDateRange("all")
+    setDraftFrom("")
+    setDraftTo("")
+    setMethod("")
+    setStatus("")
+    setDateRange("all")
+    setFrom("")
+    setTo("")
+    setPage(1)
+    setFilterError(null)
+    setFiltersOpen(false)
+  }
+
+  function changeSort(nextSortBy: RequestsSortField) {
+    if (sortBy === nextSortBy) {
+      setSortDirection((currentDirection) =>
+        currentDirection === "asc" ? "desc" : "asc"
+      )
+    } else {
+      setSortBy(nextSortBy)
+      setSortDirection("asc")
+    }
+    setPage(1)
+  }
+
+  function sortAriaValue(field: RequestsSortField): "ascending" | "descending" | "none" {
+    if (sortBy !== field) {
+      return "none"
+    }
+    return sortDirection === "asc" ? "ascending" : "descending"
+  }
+
+  function sortIndicator(field: RequestsSortField) {
+    if (sortBy !== field) {
+      return <ArrowDownUp aria-hidden="true" className="size-3.5 opacity-50" />
+    }
+    return sortDirection === "asc"
+      ? <ChevronUp aria-hidden="true" className="size-3.5" />
+      : <ChevronDown aria-hidden="true" className="size-3.5" />
+  }
 
   async function confirmDelete() {
     if (!pendingDelete || deletingTraceId !== null) {
@@ -144,7 +298,19 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     async function loadRequests() {
       try {
         setLoading(true)
-        const result = await getRequests(page, 20, search, method, status)
+        const now = Date.now()
+        const dateBounds = getDateRangeBounds(dateRange, from, to, now)
+        const result = await getRequests(
+          page,
+          20,
+          search,
+          method,
+          status,
+          dateBounds.from,
+          dateBounds.to,
+          sortBy,
+          sortDirection,
+        )
         if (active) {
           setRequests(result.data)
           setPagination(result.pagination)
@@ -172,7 +338,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       active = false
       clearInterval(interval)
     }
-  }, [page, search, method, status])
+  }, [page, search, method, status, dateRange, from, to, sortBy, sortDirection])
 
   return (
     <main className="p-6">
@@ -198,14 +364,21 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex w-full max-w-md items-center gap-2">
-          <Input
-            placeholder="Search requests..."
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value)
-              setPage(1)
-            }}
-          />
+          <div className="relative flex-1">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              className="pl-8"
+              placeholder="Search requests..."
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
           {search && (
             <Button
               variant="ghost"
@@ -220,47 +393,156 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
             </Button>
           )}
         </div>
-        <select
-          aria-label="Method"
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-          value={method}
-          onChange={(event) => {
-            setMethod(event.target.value)
-            setPage(1)
+        <PopoverPrimitive.Root
+          open={filtersOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              openFilters()
+            } else {
+              setFilterError(null)
+              setFiltersOpen(false)
+            }
           }}
         >
-          <option value="">All methods</option>
-          {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Status"
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All statuses</option>
-          {[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504].map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={!search && !method && !status}
-          onClick={() => {
-            setSearch("")
-            setMethod("")
-            setStatus("")
-            setPage(1)
-          }}
-        >
-          Reset filters
-        </Button>
+          <PopoverPrimitive.Trigger
+            render={
+              <Button
+                variant="outline"
+                size="lg"
+                aria-label="Filters"
+                aria-haspopup="dialog"
+              />
+            }
+          >
+            <Filter />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </PopoverPrimitive.Trigger>
+          <PopoverPrimitive.Portal>
+            <PopoverPrimitive.Positioner
+              side="bottom"
+              align="start"
+              sideOffset={8}
+              className="z-50 max-w-[calc(100vw-2rem)]"
+            >
+              <PopoverPrimitive.Popup className="w-[min(24rem,calc(100vw-2rem))] rounded-lg border bg-background p-4 text-foreground shadow-lg outline-none">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Method
+                      <Select
+                        aria-label="Method"
+                        className="font-normal"
+                        value={draftMethod}
+                        onChange={(event) => setDraftMethod(event.target.value)}
+                      >
+                        <option value="">All methods</option>
+                        {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Status
+                      <Select
+                        aria-label="Status"
+                        className="font-normal"
+                        value={draftStatus}
+                        onChange={(event) => setDraftStatus(event.target.value)}
+                      >
+                        <option value="">All statuses</option>
+                        {[200, 201, 204, 301, 302, 304, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504].map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </Select>
+                    </label>
+                  </div>
+
+                  <div className="space-y-3 border-t pt-4">
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Date range
+                      <Select
+                        aria-label="Date range"
+                        className="font-normal"
+                        value={draftDateRange}
+                        onChange={(event) => {
+                          const nextRange = event.target.value as DateRangePreset
+                          setDraftDateRange(nextRange)
+                          if (nextRange !== "custom") {
+                            setDraftFrom("")
+                            setDraftTo("")
+                          }
+                          setFilterError(null)
+                        }}
+                      >
+                        {dateRangeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    {draftDateRange === "custom" && (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Date and time ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+                        </p>
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          From
+                          <input
+                            aria-label="From date and time"
+                            type="datetime-local"
+                            className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
+                            value={draftFrom}
+                            onChange={(event) => {
+                              setDraftFrom(event.target.value)
+                              setFilterError(null)
+                            }}
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-medium">
+                          To
+                          <input
+                            aria-label="To date and time"
+                            type="datetime-local"
+                            className="h-9 rounded-md border bg-background px-3 text-sm font-normal text-foreground"
+                            value={draftTo}
+                            onChange={(event) => {
+                              setDraftTo(event.target.value)
+                              setFilterError(null)
+                            }}
+                          />
+                        </label>
+                      </>
+                    )}
+                    {filterError && (
+                      <p className="text-sm text-destructive" role="alert">
+                        {filterError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t pt-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={clearFilters}
+                    >
+                      Clear
+                    </Button>
+                    <Button type="button" onClick={applyFilters}>
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </PopoverPrimitive.Popup>
+            </PopoverPrimitive.Positioner>
+          </PopoverPrimitive.Portal>
+        </PopoverPrimitive.Root>
         {pagination && (
           <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
             <span className="whitespace-nowrap">
@@ -294,12 +576,72 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 font-medium">METHOD</th>
-              <th className="px-4 py-3 font-medium">PATH</th>
-              <th className="px-4 py-3 font-medium">STATUS</th>
+              <th aria-sort={sortAriaValue("method")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by HTTP method, currently ${sortAriaValue("method")}`}
+                  onClick={() => changeSort("method")}
+                >
+                  METHOD
+                  {sortIndicator("method")}
+                </Button>
+              </th>
+              <th aria-sort={sortAriaValue("path")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by path, currently ${sortAriaValue("path")}`}
+                  onClick={() => changeSort("path")}
+                >
+                  PATH
+                  {sortIndicator("path")}
+                </Button>
+              </th>
+              <th aria-sort={sortAriaValue("statusCode")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by HTTP status, currently ${sortAriaValue("statusCode")}`}
+                  onClick={() => changeSort("statusCode")}
+                >
+                  STATUS
+                  {sortIndicator("statusCode")}
+                </Button>
+              </th>
               <th className="px-4 py-3 font-medium">USER</th>
-              <th className="px-4 py-3 font-medium">STARTED AT</th>
-              <th className="px-4 py-3 text-right font-medium">DURATION</th>
+              <th aria-sort={sortAriaValue("startedAt")} className="px-4 py-3 font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 gap-1 uppercase"
+                  aria-label={`Sort by request start time, currently ${sortAriaValue("startedAt")}`}
+                  onClick={() => changeSort("startedAt")}
+                >
+                  STARTED AT
+                  {sortIndicator("startedAt")}
+                </Button>
+              </th>
+              <th aria-sort={sortAriaValue("durationMs")} className="px-4 py-3 text-right font-medium">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-mr-2 gap-1 uppercase"
+                  aria-label={`Sort by duration, currently ${sortAriaValue("durationMs")}`}
+                  onClick={() => changeSort("durationMs")}
+                >
+                  DURATION
+                  {sortIndicator("durationMs")}
+                </Button>
+              </th>
               <th className="w-12 px-4 py-3" />
             </tr>
           </thead>

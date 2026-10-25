@@ -6,6 +6,8 @@ import { SpanKind } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 
 import SpanMapper from '../src/instrumentation/span-mapper';
+import Config from '../src/config';
+import RedactionService from '../src/security/redaction.service';
 
 const span = {
   spanContext() {
@@ -72,7 +74,9 @@ const expressSpan = {
 
 const mongoSpan = { spanContext() { return { traceId: 'trace-123', spanId: 'mongo-123', traceFlags: 1, }; }, parentSpanContext: { traceId: 'trace-123', spanId: 'server-123', traceFlags: 1, }, kind: SpanKind.CLIENT, name: 'find users', startTime: [100, 0], duration: [0, 50_000_000], attributes: { 'db.system.name': 'mongodb', 'db.operation.name': 'find', 'db.collection.name': 'users', 'db.namespace': 'server_devtools', }, status: { code: 0, }, } as unknown as ReadableSpan;
 
-const mapper = new SpanMapper();
+const mapper = new SpanMapper(
+  new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES),
+);
 
 const expressResult = mapper.map(expressSpan);
 

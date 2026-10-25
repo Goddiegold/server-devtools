@@ -7,6 +7,12 @@ import { context, SpanKind, SpanStatusCode, trace } from "@opentelemetry/api";
 import { Instrumentation } from "../src/instrumentation/instrumentation";
 import SQLiteStorage from "../src/storage/sqlite-storage";
 import type { IDevToolsSpan } from "../src/types/span";
+import Config from "../src/config";
+import RedactionService from "../src/security/redaction.service";
+
+function createRedactionService(): RedactionService {
+  return new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES);
+}
 
 const redisUrl = process.env.REDIS_TEST_URL;
 const testPrefix = `server-devtools-test:${randomUUID()}:`;
@@ -78,7 +84,7 @@ before(async () => {
   if (!redisUrl) return;
 
   storage = new SQLiteStorage(":memory:");
-  instrumentation = new Instrumentation(storage);
+  instrumentation = new Instrumentation(storage, createRedactionService());
   await instrumentation.start();
 
   const Redis = (await import("ioredis")).default as unknown as new (url: string) => any;

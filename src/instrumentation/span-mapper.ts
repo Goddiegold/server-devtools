@@ -1,9 +1,11 @@
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { IDevToolsSpan, IDevToolsSpanType } from "../types";
 import { SpanKind } from "@opentelemetry/api";
+import RedactionService from "../security/redaction.service";
 
 
 export default class SpanMapper {
+    constructor(private readonly redactionService: RedactionService) { }
 
     map(span: ReadableSpan): IDevToolsSpan {
         const context = span.spanContext();
@@ -24,9 +26,7 @@ export default class SpanMapper {
             startedAt: this.hrTimeToMilliseconds(span.startTime),
             durationMs: this.hrTimeToMilliseconds(span.duration),
 
-            attributes: {
-                ...span.attributes,
-            },
+            attributes: this.redactHeaderAttributes(span.attributes),
 
             status: {
                 code: span.status.code,
@@ -43,6 +43,36 @@ export default class SpanMapper {
                 }
                 : undefined,
         }
+    }
+
+    private redactHeaderAttributes(
+        attributes: ReadableSpan["attributes"],
+    ): Record<string, unknown> {
+        const redactedAttributes: Record<string, unknown> = { ...attributes };
+        const headerPrefixes = [
+            "http.request.header.",
+            "http.response.header.",
+        ];
+
+        for (const [key, value] of Object.entries(attributes)) {
+            const normalizedKey = key.toLowerCase();
+            const prefix = headerPrefixes.find((candidate) =>
+                normalizedKey.startsWith(candidate),
+            );
+
+            if (!prefix) {
+                continue;
+            }
+
+            const headerName = key.slice(prefix.length);
+            const redactedHeader = this.redactionService.redactData({
+                [headerName]: value,
+            }) as Record<string, unknown>;
+
+            redactedAttributes[key] = redactedHeader[headerName];
+        }
+
+        return redactedAttributes;
     }
 
     private getType(span: ReadableSpan): IDevToolsSpanType {

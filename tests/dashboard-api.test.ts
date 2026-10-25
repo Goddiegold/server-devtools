@@ -102,6 +102,11 @@ async function run() {
       assert.match(await dashboardResponse.text(), /<html/i);
     }
 
+    const requestsPageResponse = await staticFetch('/_devtools/requests');
+    assert.equal(requestsPageResponse.status, 200);
+    assert.match(requestsPageResponse.headers.get('content-type') ?? '', /text\/html/);
+    assert.match(await requestsPageResponse.text(), /<html/i);
+
     const faviconResponse = await staticFetch('/_devtools/favicon.svg');
     assert.equal(faviconResponse.status, 200);
     assert.match(faviconResponse.headers.get('content-type') ?? '', /image\/svg\+xml/);
@@ -114,6 +119,29 @@ async function run() {
 
     const unauthenticatedApiResponse = await fetch(`http://127.0.0.1:${address.port}/_devtools/api/requests`);
     assert.equal(unauthenticatedApiResponse.status, 401);
+
+    const unauthenticatedOverviewResponse = await fetch(`http://127.0.0.1:${address.port}/_devtools/api/overview`);
+    assert.equal(unauthenticatedOverviewResponse.status, 401);
+
+    const overviewResponse = await apiFetch('/_devtools/api/overview');
+    assert.equal(overviewResponse.status, 200);
+    const overviewBody = await overviewResponse.json();
+    assert.equal(overviewBody.range, '1h');
+    assert.equal(typeof overviewBody.from, 'number');
+    assert.equal(typeof overviewBody.to, 'number');
+    assert.equal(overviewBody.totalRequests, 0);
+    assert.equal(overviewBody.errorRate, 0);
+    assert.equal(overviewBody.averageLatencyMs, 0);
+    assert.equal(overviewBody.slowRequests, 0);
+    assert.ok(Array.isArray(overviewBody.volume));
+    assert.deepEqual(overviewBody.recentFailures, []);
+
+    const customOverviewResponse = await apiFetch('/_devtools/api/overview?range=15m');
+    assert.equal(customOverviewResponse.status, 200);
+    assert.equal((await customOverviewResponse.json()).range, '15m');
+
+    const invalidOverviewResponse = await apiFetch('/_devtools/api/overview?range=2h');
+    assert.equal(invalidOverviewResponse.status, 400);
 
     // 4. Call the NEW endpoint we want to build
     const response = await apiFetch('/_devtools/api/requests');
@@ -193,6 +221,89 @@ async function run() {
     assert.deepEqual(combinedFilterBody.data.map((request: { id: string }) => request.id), ['trace-page-1']);
     assert.equal(combinedFilterBody.pagination.total, 1);
 
+    const dateFilteredResponse = await apiFetch('/_devtools/api/requests?from=1005&to=1010');
+    assert.equal(dateFilteredResponse.status, 200);
+    const dateFilteredBody = await dateFilteredResponse.json();
+    assert.deepEqual(
+      dateFilteredBody.data.map((request: { id: string }) => request.id),
+      ['trace-page-9', 'trace-page-8', 'trace-page-7', 'trace-page-6', 'trace-page-5'],
+    );
+    assert.deepEqual(dateFilteredBody.pagination, {
+      page: 1,
+      limit: 20,
+      total: 5,
+      totalPages: 1,
+      hasMore: false,
+    });
+
+    const invalidDateRangeResponse = await apiFetch('/_devtools/api/requests?from=1010&to=1005');
+    assert.equal(invalidDateRangeResponse.status, 400);
+
+    const sortedFirstPageResponse = await apiFetch('/_devtools/api/requests?limit=5&sortBy=durationMs&sortDirection=asc');
+    assert.equal(sortedFirstPageResponse.status, 200);
+    const sortedFirstPage = await sortedFirstPageResponse.json();
+    assert.deepEqual(
+      sortedFirstPage.data.map((request: { id: string }) => request.id),
+      ['trace-page-1', 'trace-page-2', 'trace-page-3', 'trace-page-4', 'trace-page-5'],
+    );
+    assert.equal(sortedFirstPage.pagination.total, 25);
+
+    const sortedSecondPageResponse = await apiFetch('/_devtools/api/requests?page=2&limit=5&sortBy=durationMs&sortDirection=asc');
+    assert.equal(sortedSecondPageResponse.status, 200);
+    const sortedSecondPage = await sortedSecondPageResponse.json();
+    assert.deepEqual(
+      sortedSecondPage.data.map((request: { id: string }) => request.id),
+      ['trace-page-6', 'trace-page-7', 'trace-page-8', 'trace-page-9', 'trace-page-10'],
+    );
+
+    const combinedSortedResponse = await apiFetch('/_devtools/api/requests?search=page&method=GET&status=200&sortBy=path&sortDirection=asc');
+    assert.equal(combinedSortedResponse.status, 200);
+    const combinedSortedBody = await combinedSortedResponse.json();
+    assert.deepEqual(
+      combinedSortedBody.data.map((request: { id: string }) => request.id),
+      ['trace-page-10', 'trace-page-11', 'trace-page-12', 'trace-page-13', 'trace-page-14', 'trace-page-15', 'trace-page-16', 'trace-page-17', 'trace-page-18', 'trace-page-19', 'trace-page-2', 'trace-page-20', 'trace-page-21', 'trace-page-22', 'trace-page-23', 'trace-page-24', 'trace-page-3', 'trace-page-4', 'trace-page-5', 'trace-page-6'],
+    );
+
+    const invalidSortResponse = await apiFetch('/_devtools/api/requests?sortBy=createdAt&sortDirection=asc');
+    assert.equal(invalidSortResponse.status, 400);
+
+    const querySearchTrace: IDevToolsTrace = {
+      traceId: 'trace-query-search',
+      rootSpanId: 'root-query-search',
+      startedAt: 1500,
+      durationMs: 12,
+      spans: [{
+        traceId: 'trace-query-search',
+        spanId: 'root-query-search',
+        type: 'http.server',
+        name: 'GET /users',
+        startedAt: 1500,
+        durationMs: 12,
+        attributes: {
+          'http.request.method': 'GET',
+          'url.path': '/users',
+          'http.route': '/users',
+          'url.query': 'name=Ada&marker=100%_done',
+          'http.response.status_code': 200,
+        },
+        status: { code: 0 },
+      }],
+    };
+    storage.saveSpan(querySearchTrace.spans[0]);
+    storage.saveTraceSummary(querySearchTrace.spans[0]);
+
+    const querySearchResponse = await apiFetch('/_devtools/api/requests?search=name%3DAda');
+    assert.equal(querySearchResponse.status, 200);
+    const querySearchBody = await querySearchResponse.json();
+    assert.deepEqual(querySearchBody.data.map((request: { id: string }) => request.id), ['trace-query-search']);
+    assert.equal(querySearchBody.pagination.total, 1);
+
+    const combinedQuerySearchResponse = await apiFetch('/_devtools/api/requests?search=Ada&method=GET&status=200&from=1000&to=2000');
+    assert.equal(combinedQuerySearchResponse.status, 200);
+    const combinedQuerySearchBody = await combinedQuerySearchResponse.json();
+    assert.deepEqual(combinedQuerySearchBody.data.map((request: { id: string }) => request.id), ['trace-query-search']);
+    assert.equal(combinedQuerySearchBody.pagination.total, 1);
+
     const clearedFiltersResponse = await apiFetch('/_devtools/api/requests?search=&method=&status=');
     assert.equal(clearedFiltersResponse.status, 200);
     const clearedFiltersBody = await clearedFiltersResponse.json();
@@ -200,7 +311,7 @@ async function run() {
     assert.deepEqual(clearedFiltersBody.pagination, {
       page: 1,
       limit: 20,
-      total: 25,
+      total: 26,
       totalPages: 2,
       hasMore: true,
     });

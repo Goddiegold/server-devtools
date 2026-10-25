@@ -1,8 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
-import { IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, ISession, ITraceMetadata, ITraceSummary } from "../types";
+import { DashboardOverviewRange, IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, IOverviewMetrics, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 import Config from "../config";
 
+export type TraceSummarySortField =
+    | "startedAt"
+    | "durationMs"
+    | "statusCode"
+    | "method"
+    | "path";
+export type TraceSummarySortDirection = "asc" | "desc";
 
 interface ISessionRow {
     session_hash: string;
@@ -373,6 +380,10 @@ export default class SQLiteStorage {
         search = "",
         method?: string,
         statusCode?: number,
+        startedAtFrom?: number,
+        startedAtTo?: number,
+        sortField: TraceSummarySortField = "startedAt",
+        sortDirection: TraceSummarySortDirection = "desc",
     ): {
         summaries: ITraceSummary[];
         total: number;
@@ -383,7 +394,8 @@ export default class SQLiteStorage {
         const normalizedSearch = search.trim();
         if (normalizedSearch) {
             conditions.push(`(
-                t.path LIKE ? COLLATE NOCASE ESCAPE '\\'
+                t.trace_id LIKE ? COLLATE NOCASE ESCAPE '\\'
+                OR t.path LIKE ? COLLATE NOCASE ESCAPE '\\'
                 OR t.route LIKE ? COLLATE NOCASE ESCAPE '\\'
                 OR EXISTS (
                     SELECT 1
@@ -392,10 +404,18 @@ export default class SQLiteStorage {
                       AND s.span_id = t.root_span_id
                       AND s.name LIKE ? COLLATE NOCASE ESCAPE '\\'
                 )
+                OR EXISTS (
+                    SELECT 1
+                    FROM spans s
+                    WHERE s.trace_id = t.trace_id
+                      AND s.span_id = t.root_span_id
+                      AND json_extract(s.attributes_json, '$."url.query"')
+                          LIKE ? COLLATE NOCASE ESCAPE '\\'
+                )
             )`);
             const escapedSearch = normalizedSearch.replace(/[\\%_]/g, character => `\\${character}`);
             const searchPattern = `%${escapedSearch}%`;
-            parameters.push(searchPattern, searchPattern, searchPattern);
+            parameters.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
         }
 
         const normalizedMethod = method?.trim();
@@ -409,9 +429,29 @@ export default class SQLiteStorage {
             parameters.push(statusCode);
         }
 
+        if (startedAtFrom !== undefined) {
+            conditions.push("t.started_at >= ?");
+            parameters.push(startedAtFrom);
+        }
+
+        if (startedAtTo !== undefined) {
+            conditions.push("t.started_at < ?");
+            parameters.push(startedAtTo);
+        }
+
         const whereClause = conditions.length > 0
             ? `WHERE ${conditions.join(" AND ")}`
             : "";
+        const sortColumns: Record<TraceSummarySortField, string> = {
+            startedAt: "t.started_at",
+            durationMs: "t.duration_ms",
+            statusCode: "t.status_code",
+            method: "t.method",
+            path: "t.path",
+        };
+        const sortColumn = sortColumns[sortField];
+        const sortNullsLast = `CASE WHEN ${sortColumn} IS NULL THEN 1 ELSE 0 END ASC`;
+        const sortOrder = `${sortColumn} ${sortDirection.toUpperCase()}`;
         const totalRow = this.db.prepare(`
         SELECT COUNT(*) AS total
         FROM traces t
@@ -428,7 +468,7 @@ export default class SQLiteStorage {
         LEFT JOIN trace_metadata tm
             ON tm.trace_id = t.trace_id
         ${whereClause}
-        ORDER BY t.started_at DESC
+        ORDER BY ${sortNullsLast}, ${sortOrder}, t.trace_id ASC
         LIMIT ? OFFSET ?
     `).all(...parameters, limit, offset);
 
@@ -456,6 +496,81 @@ export default class SQLiteStorage {
         });
 
         return { summaries, total: totalRow.total };
+    }
+
+    getOverview(
+        range: DashboardOverviewRange,
+        now = Date.now(),
+    ): IOverviewMetrics {
+        const rangeMs: Record<DashboardOverviewRange, number> = {
+            "15m": 15 * 60 * 1000,
+            "1h": 60 * 60 * 1000,
+            "6h": 6 * 60 * 60 * 1000,
+            "24h": 24 * 60 * 60 * 1000,
+        };
+        const to = now;
+        const from = to - rangeMs[range];
+        const bucketCount = range === "15m" ? 15 : range === "1h" ? 12 : 24;
+        const bucketWidth = rangeMs[range] / bucketCount;
+
+        const rows = this.db.prepare(`
+            SELECT trace_id, started_at, duration_ms, method, path, route, status_code, has_error
+            FROM traces
+            WHERE started_at >= ? AND started_at < ?
+            ORDER BY started_at DESC
+        `).all(from, to) as {
+            trace_id: string;
+            started_at: number;
+            duration_ms: number | null;
+            method: string | null;
+            path: string | null;
+            route: string | null;
+            status_code: number | null;
+            has_error: number;
+        }[];
+
+        const durations = rows
+            .map(row => row.duration_ms)
+            .filter((duration): duration is number => duration !== null && Number.isFinite(duration));
+        const failures = rows
+            .filter(row => row.status_code !== null && row.status_code >= 500 && row.status_code < 600)
+            .slice(0, 10)
+            .map(row => ({
+                id: row.trace_id,
+                method: row.method ?? "—",
+                path: row.path ?? "—",
+                route: row.route ?? undefined,
+                statusCode: row.status_code ?? undefined,
+                durationMs: row.duration_ms ?? undefined,
+                startedAt: row.started_at,
+                hasError: row.has_error === 1,
+            }));
+
+        const volume = Array.from({ length: bucketCount }, (_, index) => {
+            const startAt = from + index * bucketWidth;
+            const endAt = index === bucketCount - 1 ? to : startAt + bucketWidth;
+            return {
+                startAt,
+                endAt,
+                count: rows.filter(row => row.started_at >= startAt && row.started_at < endAt).length,
+            };
+        });
+
+        return {
+            range,
+            from,
+            to,
+            totalRequests: rows.length,
+            errorRate: rows.length === 0 ? 0 : failures.length > 0
+                ? rows.filter(row => row.status_code !== null && row.status_code >= 500 && row.status_code < 600).length / rows.length
+                : 0,
+            averageLatencyMs: durations.length === 0
+                ? 0
+                : durations.reduce((sum, duration) => sum + duration, 0) / durations.length,
+            slowRequests: durations.filter(duration => duration > 500).length,
+            volume,
+            recentFailures: failures,
+        };
     }
 
     saveRequestBody(traceId: string, body: unknown): void {

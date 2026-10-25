@@ -3,14 +3,18 @@ import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-node";
 import SpanMapper from "./span-mapper";
 import SQLiteStorage from "../storage/sqlite-storage";
 import { debugLog } from "../utils/logger";
+import RedactionService from "../security/redaction.service";
 
 
 export default class ServerDevToolsExporter implements SpanExporter {
-    private readonly spanMapper = new SpanMapper();
+    private readonly spanMapper: SpanMapper;
 
     constructor(
-        private readonly storage: SQLiteStorage
-    ) { }
+        private readonly storage: SQLiteStorage,
+        redactionService: RedactionService,
+    ) {
+        this.spanMapper = new SpanMapper(redactionService);
+    }
 
     export(
         spans: ReadableSpan[],

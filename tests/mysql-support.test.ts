@@ -5,6 +5,12 @@ import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import ServerDevToolsExporter from "../src/instrumentation/exporter";
 import SpanMapper from "../src/instrumentation/span-mapper";
 import SQLiteStorage from "../src/storage/sqlite-storage";
+import Config from "../src/config";
+import RedactionService from "../src/security/redaction.service";
+
+function createRedactionService(): RedactionService {
+  return new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES);
+}
 
 function makeSpan({
   traceId,
@@ -52,7 +58,7 @@ function makeSpan({
   } as unknown as ReadableSpan;
 }
 
-const mapper = new SpanMapper();
+const mapper = new SpanMapper(createRedactionService());
 const traceId = "mysql2-trace";
 const requestSpanId = "mysql2-request";
 
@@ -156,7 +162,7 @@ const requestSpan = {
 } as unknown as ReadableSpan;
 
 const storage = new SQLiteStorage(":memory:");
-const exporter = new ServerDevToolsExporter(storage);
+const exporter = new ServerDevToolsExporter(storage, createRedactionService());
 let exportCode: number | undefined;
 
 exporter.export(

@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { createServer, request as httpRequest, type Server } from "node:http";
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type Server,
+} from "node:http";
 
 import SQLiteStorage from "../src/storage/sqlite-storage";
 import { OutboundHttpCapture } from "../src/instrumentation/outbound-http/outbound-http-capture";
+import Config from "../src/config";
+import RedactionService from "../src/security/redaction.service";
+
+function createRedactionService(): RedactionService {
+  return new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES);
+}
 
 function createStorage(t: TestContext): SQLiteStorage {
   const storage = new SQLiteStorage(":memory:");
@@ -78,7 +89,7 @@ test("native HTTP capture records headers and complete chunked bodies without co
   });
   closeServer(t, server);
   const baseUrl = await startServer(server);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const request = httpRequest(`${baseUrl}/native`, {
     method: "POST",
     headers: {
@@ -120,6 +131,121 @@ test("native HTTP capture records headers and complete chunked bodies without co
   assert.deepEqual(details?.responseBody, { received: "by-app" });
 });
 
+test("native HTTP header capture redacts stored secrets without changing traffic", async (t) => {
+  const storage = createStorage(t);
+  const server = createServer((request, response) => {
+    assert.equal(request.headers.authorization, "native-authorization-secret");
+    assert.equal(request.headers.cookie, "native-cookie-secret");
+    assert.equal(request.headers["x-api-key"], "native-api-secret");
+    assert.equal(request.headers["x-visible-request"], "visible-request");
+
+    response.writeHead(200, {
+      "set-cookie": ["native-cookie-a", "native-cookie-b"],
+      "x-api-key": "native-response-secret",
+      "x-visible-response": "visible-response",
+    });
+    response.end("native response");
+  });
+  closeServer(t, server);
+  const baseUrl = await startServer(server);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const request = httpRequest(`${baseUrl}/native-headers`, {
+    headers: {
+      authorization: "native-authorization-secret",
+      cookie: "native-cookie-secret",
+      "x-api-key": "native-api-secret",
+      "x-visible-request": "visible-request",
+    },
+  });
+  capture.trackNativeRequest("native-header-span", request);
+
+  const responseReceived = new Promise<IncomingMessage>((resolve, reject) => {
+    request.once("response", (response) => {
+      capture.trackNativeResponse("native-header-span", response);
+      response.resume();
+      response.once("end", () => resolve(response));
+    });
+    request.once("error", reject);
+  });
+  request.end();
+  const response = await responseReceived;
+
+  assert.deepEqual(response.headers["set-cookie"], [
+    "native-cookie-a",
+    "native-cookie-b",
+  ]);
+  assert.equal(response.headers["x-api-key"], "native-response-secret");
+  assert.equal(response.headers["x-visible-response"], "visible-response");
+
+  const details = storage.getHttpClientDetails("native-header-span");
+  assert.equal(details?.requestHeaders?.authorization, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.cookie, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-visible-request"], "visible-request");
+  assert.equal(details?.responseHeaders?.["set-cookie"], "[REDACTED]");
+  assert.equal(details?.responseHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.responseHeaders?.["x-visible-response"], "visible-response");
+});
+
+test("native HTTP capture limits request and response bodies without changing stream bytes", async (t) => {
+  const storage = createStorage(t);
+  const bodyLimit = 256 * 1024;
+  const cases = [
+    { name: "below", body: "é".repeat(bodyLimit / 2 - 1) },
+    { name: "exact", body: "😀".repeat(bodyLimit / 4) },
+    { name: "above", body: `${"😀".repeat(bodyLimit / 4)}x` },
+  ];
+  const server = createServer((request, response) => {
+    const testCase = cases.find((value) => request.url === `/${value.name}`);
+    assert.ok(testCase);
+    const requestChunks: Buffer[] = [];
+    request.on("data", (chunk) => requestChunks.push(Buffer.from(chunk)));
+    request.on("end", () => {
+      assert.equal(Buffer.concat(requestChunks).toString(), testCase.body);
+      response.writeHead(200, { "content-type": "text/plain" });
+      const responseBuffer = Buffer.from(testCase.body);
+      response.write(responseBuffer.subarray(0, Math.floor(responseBuffer.length / 2)));
+      response.end(responseBuffer.subarray(Math.floor(responseBuffer.length / 2)));
+    });
+  });
+  closeServer(t, server);
+  const baseUrl = await startServer(server);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+
+  for (const testCase of cases) {
+    const request = httpRequest(`${baseUrl}/${testCase.name}`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+    });
+    capture.trackNativeRequest(`native-${testCase.name}`, request);
+    const bodyBuffer = Buffer.from(testCase.body);
+    request.write(bodyBuffer.subarray(0, Math.floor(bodyBuffer.length / 2)));
+
+    const responseReceived = new Promise<string>((resolve, reject) => {
+      request.once("response", (response) => {
+        capture.trackNativeResponse(`native-${testCase.name}`, response);
+        const responseChunks: Buffer[] = [];
+        response.on("data", (chunk) => responseChunks.push(Buffer.from(chunk)));
+        response.once("end", () => resolve(Buffer.concat(responseChunks).toString()));
+        response.once("error", reject);
+      });
+      request.once("error", reject);
+    });
+
+    request.end(bodyBuffer.subarray(Math.floor(bodyBuffer.length / 2)));
+    assert.equal(await responseReceived, testCase.body);
+
+    const details = storage.getHttpClientDetails(`native-${testCase.name}`);
+    if (bodyBuffer.length <= bodyLimit) {
+      assert.equal(details?.requestBody, testCase.body);
+      assert.equal(details?.responseBody, testCase.body);
+    } else {
+      assert.equal(details?.requestBody, undefined);
+      assert.equal(details?.responseBody, undefined);
+    }
+  }
+});
+
 test("fetch capture stores JSON/text payloads and headers, permits bodyless requests, and isolates concurrent spans", async (t) => {
   const storage = createStorage(t);
   const server = createServer((request, response) => {
@@ -145,7 +271,7 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   });
   closeServer(t, server);
   const baseUrl = await startServer(server);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const originalFetch = globalThis.fetch;
   const spanByPath: Record<string, string> = {
     "/json-a": "fetch-span-a",
@@ -205,9 +331,201 @@ test("fetch capture stores JSON/text payloads and headers, permits bodyless requ
   assert.equal(emptyDetails?.responseBody, undefined);
 });
 
+test("fetch header capture redacts stored secrets without changing traffic", async (t) => {
+  const storage = createStorage(t);
+  const server = createServer((request, response) => {
+    assert.equal(request.headers.authorization, "fetch-authorization-secret");
+    assert.equal(request.headers.cookie, "fetch-cookie-secret");
+    assert.equal(request.headers["x-api-key"], "fetch-api-secret");
+    assert.equal(request.headers["x-visible-request"], "visible-request");
+    response.writeHead(200, {
+      "x-api-key": "fetch-response-secret",
+      "x-visible-response": "visible-response",
+    });
+    response.end("fetch response");
+  });
+  closeServer(t, server);
+  const baseUrl = await startServer(server);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const request = new Request(input, init);
+    capture.associateFetchSpan("fetch-header-span");
+    return originalFetch(request);
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await globalThis.fetch(`${baseUrl}/fetch-headers`, {
+    headers: {
+      authorization: "fetch-authorization-secret",
+      cookie: "fetch-cookie-secret",
+      "x-api-key": "fetch-api-secret",
+      "x-visible-request": "visible-request",
+    },
+  });
+
+  assert.equal(response.headers.get("x-api-key"), "fetch-response-secret");
+  assert.equal(response.headers.get("x-visible-response"), "visible-response");
+  assert.equal(await response.text(), "fetch response");
+
+  const details = storage.getHttpClientDetails("fetch-header-span");
+  assert.equal(details?.requestHeaders?.authorization, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.cookie, "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.requestHeaders?.["x-visible-request"], "visible-request");
+  assert.equal(details?.responseHeaders?.["x-api-key"], "[REDACTED]");
+  assert.equal(details?.responseHeaders?.["x-visible-response"], "visible-response");
+});
+
+test("fetch capture errors do not reject or consume a successful response", async (t) => {
+  const storage = createStorage(t);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+  const applicationResponse = new Response("application response");
+
+  applicationResponse.clone = () => ({
+    headers: new Headers(),
+    body: {},
+    text: async () => { throw new Error("capture body read failed"); },
+  } as unknown as Response);
+
+  globalThis.fetch = (async () => {
+    capture.associateFetchSpan("fetch-span");
+    return applicationResponse;
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const response = await globalThis.fetch("http://example.test");
+
+  assert.equal(await response.text(), "application response");
+});
+
+test("fetch capture limits request and response bodies without changing stream bytes", async (t) => {
+  const storage = createStorage(t);
+  const bodyLimit = 256 * 1024;
+  const cases = [
+    { name: "below", body: Buffer.from("é".repeat(1024)) },
+    { name: "exact", body: Buffer.from("😀".repeat(bodyLimit / 4)) },
+    { name: "above", body: Buffer.concat([
+      Buffer.from("é".repeat(bodyLimit / 2)),
+      Buffer.from("x"),
+    ]) },
+  ];
+  const receivedRequests = new Map<string, Buffer>();
+  const responseBodies = new Map<string, Buffer>();
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+
+  const readBody = async (body: ReadableStream<Uint8Array> | null): Promise<Buffer> => {
+    if (!body) {
+      return Buffer.alloc(0);
+    }
+
+    const reader = body.getReader();
+    const chunks: Buffer[] = [];
+    while (true) {
+      const result = await reader.read();
+      if (result.done) {
+        return Buffer.concat(chunks);
+      }
+      chunks.push(Buffer.from(result.value));
+    }
+  };
+
+  const chunked = (body: Buffer): ReadableStream<Uint8Array> => {
+    let offset = 0;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset >= body.length) {
+          controller.close();
+          return;
+        }
+        const end = Math.min(offset + 8192, body.length);
+        controller.enqueue(new Uint8Array(body.subarray(offset, end)));
+        offset = end;
+      },
+    });
+  };
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const name = new URL(request.url).pathname.slice(1);
+    capture.associateFetchSpan(`fetch-limit-${name}`);
+    const received = await readBody(request.body);
+    receivedRequests.set(name, received);
+    const responseBody = cases.find(testCase => testCase.name === name)?.body ?? Buffer.alloc(0);
+    responseBodies.set(name, responseBody);
+    return new Response(chunked(responseBody), {
+      headers: { "content-type": "text/plain" },
+    });
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  for (const testCase of cases) {
+    const response = await globalThis.fetch(`http://example.test/${testCase.name}`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: chunked(testCase.body),
+      duplex: "half",
+    } as RequestInit);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), responseBodies.get(testCase.name));
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 25));
+
+  for (const testCase of cases) {
+    assert.deepEqual(receivedRequests.get(testCase.name), testCase.body);
+    const details = storage.getHttpClientDetails(`fetch-limit-${testCase.name}`);
+    if (testCase.body.length <= bodyLimit) {
+      assert.equal(details?.requestBody, testCase.body.toString("utf8"));
+      assert.equal(details?.responseBody, testCase.body.toString("utf8"));
+    } else {
+      assert.equal(details?.requestBody, undefined);
+      assert.equal(details?.responseBody, undefined);
+    }
+  }
+});
+
+test("fetch returns the original response before a slow capture clone finishes", async (t) => {
+  const storage = createStorage(t);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
+  const originalFetch = globalThis.fetch;
+  let releaseCapture!: () => void;
+  const captureReleased = new Promise<void>(resolve => {
+    releaseCapture = resolve;
+  });
+
+  globalThis.fetch = (async () => {
+    capture.associateFetchSpan("fetch-slow-span");
+    return new Response(new ReadableStream<Uint8Array>({
+      async start(controller) {
+        await captureReleased;
+        controller.enqueue(new TextEncoder().encode("slow response"));
+        controller.close();
+      },
+    }));
+  }) as typeof globalThis.fetch;
+  capture.startFetchCapture();
+  t.after(() => {
+    releaseCapture();
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await Promise.race([
+    globalThis.fetch("http://example.test/slow"),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("fetch waited for capture")), 100)),
+  ]);
+
+  releaseCapture();
+  assert.equal(await response.text(), "slow response");
+});
+
 test("stopping fetch capture is safe before startup and restores the original fetch", (t) => {
   const storage = createStorage(t);
-  const capture = new OutboundHttpCapture(storage);
+  const capture = new OutboundHttpCapture(storage, createRedactionService());
   const originalFetch = globalThis.fetch;
 
   capture.stopFetchCapture();

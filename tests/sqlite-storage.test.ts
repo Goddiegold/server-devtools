@@ -264,6 +264,305 @@ storage.saveTraceSummary(postClearTrace);
 assert.equal(storage.getTrace("trace-after-clear")?.traceId, "trace-after-clear");
 assert.equal(storage.getTraceSummaries().length, 1);
 
+const requestFilterStorage = new SQLiteStorage(":memory:");
+for (const request of [
+    { traceId: "filter-before", startedAt: 1000 },
+    { traceId: "filter-start", startedAt: 2000 },
+    { traceId: "filter-middle", startedAt: 3000 },
+    { traceId: "filter-end", startedAt: 4000 },
+]) {
+    const span: IDevToolsSpan = {
+        traceId: request.traceId,
+        spanId: `${request.traceId}-root`,
+        type: "http.server",
+        name: "GET /filtered",
+        startedAt: request.startedAt,
+        durationMs: 10,
+        attributes: {
+            "http.request.method": "GET",
+            "url.path": "/filtered",
+            "http.response.status_code": 200,
+        },
+        status: { code: 0 },
+    };
+    requestFilterStorage.saveTraceSummary(span);
+}
+
+const filteredRequests = requestFilterStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    2000,
+    4001,
+);
+assert.deepEqual(
+    filteredRequests.summaries.map(summary => summary.traceId),
+    ["filter-end", "filter-middle", "filter-start"],
+);
+assert.equal(filteredRequests.total, 3);
+const exclusiveEndRequests = requestFilterStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    2000,
+    4000,
+);
+assert.deepEqual(
+    exclusiveEndRequests.summaries.map(summary => summary.traceId),
+    ["filter-middle", "filter-start"],
+);
+assert.equal(exclusiveEndRequests.total, 2);
+requestFilterStorage.close();
+
+const sortStorage = new SQLiteStorage(":memory:");
+for (const request of [
+    { traceId: "sort-z", startedAt: 1000, durationMs: 50, statusCode: 200, method: "GET", path: "/z" },
+    { traceId: "sort-a", startedAt: 2000, durationMs: 50, statusCode: 500, method: "POST", path: "/a" },
+    { traceId: "sort-missing", startedAt: 3000, durationMs: 1 },
+    { traceId: "sort-b", startedAt: 4000, durationMs: 10, statusCode: 200, method: "GET", path: "/b" },
+]) {
+    const span: IDevToolsSpan = {
+        traceId: request.traceId,
+        spanId: `${request.traceId}-root`,
+        type: "http.server",
+        name: "GET /sorted",
+        startedAt: request.startedAt,
+        durationMs: request.durationMs,
+        attributes: {
+            ...(request.method ? { "http.request.method": request.method } : {}),
+            ...(request.path ? { "url.path": request.path } : {}),
+            ...(request.statusCode === undefined
+                ? {}
+                : { "http.response.status_code": request.statusCode }),
+        },
+        status: { code: 0 },
+    };
+    sortStorage.saveTraceSummary(span);
+}
+(sortStorage as any).db
+    .prepare("UPDATE traces SET duration_ms = NULL WHERE trace_id = ?")
+    .run("sort-missing");
+
+const durationAscending = sortStorage.getPaginatedTraceSummaries(
+    1,
+    2,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "durationMs",
+    "asc",
+);
+assert.deepEqual(
+    durationAscending.summaries.map(summary => summary.traceId),
+    ["sort-b", "sort-a"],
+);
+assert.equal(durationAscending.total, 4);
+
+const statusDescending = sortStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "statusCode",
+    "desc",
+);
+assert.deepEqual(
+    statusDescending.summaries.map(summary => summary.traceId),
+    ["sort-a", "sort-b", "sort-z", "sort-missing"],
+);
+
+const methodAscending = sortStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "method",
+    "asc",
+);
+assert.deepEqual(
+    methodAscending.summaries.map(summary => summary.traceId),
+    ["sort-b", "sort-z", "sort-a", "sort-missing"],
+);
+sortStorage.close();
+
+const querySearchStorage = new SQLiteStorage(":memory:");
+const querySearchSpan: IDevToolsSpan = {
+    traceId: "query-search",
+    spanId: "query-search-root",
+    type: "http.server",
+    name: "GET /users",
+    startedAt: 1500,
+    durationMs: 12,
+    attributes: {
+        "http.request.method": "GET",
+        "url.path": "/users",
+        "http.route": "/users",
+        "url.query": "name=Ada&marker=100%_done",
+        "http.response.status_code": 200,
+    },
+    status: { code: 0 },
+};
+querySearchStorage.saveSpan(querySearchSpan);
+querySearchStorage.saveTraceSummary(querySearchSpan);
+
+for (const search of ["Ada", "name", "name=Ada"]) {
+    const result = querySearchStorage.getPaginatedTraceSummaries(1, 20, search);
+    assert.deepEqual(result.summaries.map(summary => summary.traceId), ["query-search"]);
+    assert.equal(result.total, 1);
+}
+
+const traceIdSearchResult = querySearchStorage.getPaginatedTraceSummaries(1, 20, "query-search");
+assert.deepEqual(traceIdSearchResult.summaries.map(summary => summary.traceId), ["query-search"]);
+assert.equal(traceIdSearchResult.total, 1);
+
+const literalWildcardResult = querySearchStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "100%_done",
+);
+assert.deepEqual(literalWildcardResult.summaries.map(summary => summary.traceId), ["query-search"]);
+assert.equal(literalWildcardResult.total, 1);
+
+const combinedQueryResult = querySearchStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "Ada",
+    "GET",
+    200,
+    1000,
+    2000,
+);
+assert.deepEqual(combinedQueryResult.summaries.map(summary => summary.traceId), ["query-search"]);
+assert.equal(combinedQueryResult.total, 1);
+querySearchStorage.close();
+
+// Overview aggregation uses one canonical trace row per incoming request,
+// ignores the exclusive upper boundary, and safely handles incomplete rows.
+const overviewStorage = new SQLiteStorage(":memory:");
+const overviewNow = 100_000;
+const overviewFrom = overviewNow - 60 * 60 * 1000;
+
+function saveOverviewTrace(input: {
+    traceId: string;
+    startedAt: number;
+    durationMs?: number;
+    statusCode?: number;
+    child?: boolean;
+}): void {
+    const root: IDevToolsSpan = {
+        traceId: input.traceId,
+        spanId: `${input.traceId}-root`,
+        type: "http.server",
+        name: "GET /overview",
+        startedAt: input.startedAt,
+        durationMs: input.durationMs ?? 1,
+        attributes: {
+            "http.request.method": "GET",
+            "url.path": "/overview",
+            ...(input.statusCode === undefined
+                ? {}
+                : { "http.response.status_code": input.statusCode }),
+        },
+        status: { code: 0 },
+    };
+
+    overviewStorage.saveSpan(root);
+    if (input.child) {
+        overviewStorage.saveSpan({
+            traceId: input.traceId,
+            spanId: `${input.traceId}-child`,
+            parentSpanId: root.spanId,
+            type: "database",
+            name: "query",
+            startedAt: input.startedAt + 1,
+            durationMs: 50,
+            attributes: {},
+            status: { code: 0 },
+        });
+    }
+    overviewStorage.saveTraceSummary(root);
+    if (input.durationMs === undefined) {
+        (overviewStorage as unknown as { db: DatabaseSync }).db
+            .prepare("UPDATE traces SET duration_ms = NULL WHERE trace_id = ?")
+            .run(input.traceId);
+    }
+}
+
+saveOverviewTrace({
+    traceId: "overview-boundary-start",
+    startedAt: overviewFrom,
+    durationMs: 99,
+    statusCode: 500,
+});
+saveOverviewTrace({
+    traceId: "overview-success",
+    startedAt: overviewFrom + 1,
+    durationMs: 100,
+    statusCode: 200,
+    child: true,
+});
+saveOverviewTrace({
+    traceId: "overview-failure",
+    startedAt: overviewFrom + 10,
+    durationMs: 501,
+    statusCode: 503,
+});
+saveOverviewTrace({
+    traceId: "overview-missing-duration",
+    startedAt: overviewFrom + 20,
+    statusCode: 200,
+});
+saveOverviewTrace({
+    traceId: "overview-boundary-end",
+    startedAt: overviewNow,
+    durationMs: 1,
+    statusCode: 500,
+});
+
+const overview = overviewStorage.getOverview("1h", overviewNow);
+assert.equal(overview.totalRequests, 4);
+assert.equal(overview.errorRate, 2 / 4);
+assert.equal(overview.averageLatencyMs, 700 / 3);
+assert.equal(overview.slowRequests, 1);
+assert.equal(overview.volume.reduce((sum, bucket) => sum + bucket.count, 0), 4);
+assert.equal(overview.volume.every((bucket) => bucket.startAt < bucket.endAt), true);
+assert.equal(overview.volume.some((bucket) => bucket.count === 0), true);
+assert.deepEqual(
+    overview.recentFailures.map((failure) => failure.id),
+    ["overview-failure", "overview-boundary-start"],
+);
+
+const emptyOverview = overviewStorage.getOverview("15m", 0);
+assert.equal(emptyOverview.totalRequests, 0);
+assert.equal(emptyOverview.errorRate, 0);
+assert.equal(emptyOverview.averageLatencyMs, 0);
+assert.equal(emptyOverview.slowRequests, 0);
+assert.equal(emptyOverview.recentFailures.length, 0);
+assert.equal(emptyOverview.volume.reduce((sum, bucket) => sum + bucket.count, 0), 0);
+
+for (const range of ["15m", "1h", "6h", "24h"] as const) {
+    const rangeOverview = overviewStorage.getOverview(range, overviewNow);
+    assert.equal(
+        rangeOverview.volume.reduce((sum, bucket) => sum + bucket.count, 0),
+        rangeOverview.totalRequests,
+    );
+    assert.equal(rangeOverview.from < rangeOverview.to, true);
+}
+
+overviewStorage.close();
+
 storage.close();
 
 /**
