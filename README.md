@@ -93,8 +93,9 @@ you do not need to install the database instrumentation packages separately.
 
 ## Quick Start
 
-ServerDevTools uses an authenticated, optionally encrypted initialization file.
-Keep the credentials and encryption key in environment variables.
+ServerDevTools uses an authenticated dashboard and stores inspection history in
+`./server-devtools.db` by default, relative to the process working directory.
+Keep dashboard credentials and any encryption key in environment variables.
 
 The encryption key must be a base64-encoded 32-byte key. Generate one with:
 
@@ -178,6 +179,52 @@ server.listen(3000);
 ```sh
 tsx watch --import ./server-devtools.ts src/main.ts
 ```
+
+------------------------------------------------------------------------
+
+## Data handling and privacy
+
+ServerDevTools is an in-process developer inspector. Depending on the active
+instrumentation, request context, and framework integration, it can persist
+incoming request summaries and selected headers, paths and query attributes,
+parsed request bodies, response status/headers/bodies, database and Redis
+spans, outbound HTTP details, span errors and stack traces, and current-user
+data when `getCurrentUser` is configured. A category is not guaranteed for
+every request: preload order, active request context, framework parsers, and
+instrumentation-specific hooks determine what is available.
+
+The only trace persistence provider currently implemented is local SQLite at
+`./server-devtools.db`; the supported database and Redis instrumentations are
+capture sources, not telemetry storage providers. The SDK does not send
+telemetry to a ServerDevTools service or require an OpenTelemetry Collector.
+Use **Clear History** or delete an individual trace to remove trace data.
+There is no automatic trace retention or TTL. Dashboard sessions are stored
+separately, expire after 24 hours, and are removed on logout or expiry lookup.
+
+Header-name redaction is enabled by default before captured HTTP details and
+HTTP span attributes are persisted. The defaults are `authorization`,
+`proxy-authorization`, `cookie`, `set-cookie`, and `x-api-key`; `redaction`'s
+`additionalHeaders` extends that list. Names are trimmed, matched
+case-insensitively, and deduplicated. Redaction does not cover body fields,
+URLs, query parameters, or arbitrary non-header span attributes, and it does
+not rewrite existing records.
+
+Optional AES-256-GCM encryption protects configured field names in supported
+metadata and outbound-detail records at rest. It is separate from redaction,
+does not encrypt the whole database or all span attributes, and authorized
+dashboard/API reads decrypt covered values. See the [configuration reference](https://server-devtools-docs.vercel.app/configuration/reference),
+[encryption guide](https://server-devtools-docs.vercel.app/configuration/encryption),
+and [security guidance](https://server-devtools-docs.vercel.app/resources/security)
+for the exact coverage.
+
+The fixed 256 KiB limit applies independently to native outbound request and
+response body capture. An oversized body is skipped rather than truncated;
+headers and the original network payload are preserved. Inbound response and
+fetch body capture do not currently have an SDK byte limit. Capture buffers or
+clones data, and persistence can add synchronous work; capture failures are
+isolated where implemented, but do not assume zero overhead or non-blocking
+behavior. Treat captured data and the embedded dashboard as sensitive in any
+shared or production-like environment.
 
 `await devtools.start()` automatically registers OpenTelemetry's ESM loader hook
 once per process before starting the OpenTelemetry SDK. Keep startup in the
