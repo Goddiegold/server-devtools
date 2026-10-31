@@ -13,26 +13,28 @@ import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
 import AuthService from "../security/auth.service";
 import { ISession } from "../types";
 import { debugLog } from "../utils/logger";
+import { normalizeRemoteAddress } from "../utils/helpers";
+import {
+    RateLimiterMemory,
+    RateLimiterRes,
+} from "rate-limiter-flexible";
 
 const sourceBuildDashboardDirectory = path.resolve(__dirname, "../../dist/dashboard");
 const dashboardDirectory = existsSync(path.join(sourceBuildDashboardDirectory, "index.html"))
     ? sourceBuildDashboardDirectory
     : path.resolve(__dirname, "../../dashboard");
-const contentTypes: Record<string, string> = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-    ".css": "text/css; charset=utf-8",
-    ".svg": "image/svg+xml",
-    ".woff2": "font/woff2",
-    ".json": "application/json; charset=utf-8",
-};
-
 
 export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
     private readonly responseDetailMapper = new DashboardResponseDetailMapper()
     private readonly errorMapper = new DashboardErrorMapper()
+    private readonly loginRateLimiter = new RateLimiterMemory({
+        keyPrefix: "server-devtools-dashboard-login",
+        points: Config.DASHBOARD_LOGIN_RATE_LIMIT.POINTS,
+        duration: Config.DASHBOARD_LOGIN_RATE_LIMIT.DURATION_SECONDS,
+        blockDuration: Config.DASHBOARD_LOGIN_RATE_LIMIT.BLOCK_SECONDS,
+    });
     // private server?: Server;
 
 
@@ -119,6 +121,37 @@ export default class DashboardServer {
 
     private async handleLogin(req: IncomingMessage,
         res: ServerResponse) {
+        try {
+            await this.loginRateLimiter.consume(
+                normalizeRemoteAddress(req.socket.remoteAddress),
+            );
+        } catch (error) {
+            if (error instanceof RateLimiterRes) {
+                res.statusCode = 429;
+                res.setHeader("Retry-After", Math.max(
+                    1,
+                    Math.ceil(error.msBeforeNext / 1000),
+                ));
+                res.setHeader("Content-Type", "application/json");
+                res.setHeader("Cache-Control", "no-store");
+                res.end(JSON.stringify({
+                    message: "Too many login attempts",
+                }));
+                return;
+            }
+
+            debugLog("Dashboard login rate-limit failed", {
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
+            res.statusCode = 503;
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.end(JSON.stringify({
+                message: "Unable to process login request",
+            }));
+            return;
+        }
+
         const body = await this.readJsonBody(req) as {
             username?: string;
             password?: string;
@@ -912,7 +945,7 @@ export default class DashboardServer {
 
                 const content = readFileSync(filePath);
                 res.statusCode = 200;
-                res.setHeader("Content-Type", contentTypes[path.extname(filePath)] ?? "application/octet-stream");
+                res.setHeader("Content-Type", Config.DASHBOARD_CONTENT_TYPES[path.extname(filePath)] ?? "application/octet-stream");
                 res.end(content);
                 return;
             } catch {
@@ -920,7 +953,7 @@ export default class DashboardServer {
                     try {
                         const content = readFileSync(path.join(dashboardDirectory, "index.html"));
                         res.statusCode = 200;
-                        res.setHeader("Content-Type", contentTypes[".html"]);
+                        res.setHeader("Content-Type", Config.DASHBOARD_CONTENT_TYPES[".html"]);
                         res.end(content);
                         return;
                     } catch {

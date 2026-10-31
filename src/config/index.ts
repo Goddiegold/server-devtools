@@ -9,6 +9,19 @@ export default {
         OVERVIEW: '/_devtools/api/overview',
         AUTH: '/_devtools/api/auth'
     },
+    DASHBOARD_CONTENT_TYPES: {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".svg": "image/svg+xml",
+        ".woff2": "font/woff2",
+        ".json": "application/json; charset=utf-8",
+    } as Record<string, string>,
+    DASHBOARD_LOGIN_RATE_LIMIT: {
+        POINTS: 5,
+        DURATION_SECONDS: 15 * 60,
+        BLOCK_SECONDS: 15 * 60,
+    },
     REQUEST_METHOD: {
         GET: 'GET',
         POST: 'POST',
