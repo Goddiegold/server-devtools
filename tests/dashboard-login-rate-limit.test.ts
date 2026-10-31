@@ -18,7 +18,7 @@ async function startDashboard(t: TestContext) {
         value: testRemoteAddress,
       });
     }
-    void dashboard.handle(request, response);
+    void Promise.resolve(dashboard.handle(request, response)).catch(() => undefined);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -46,6 +46,7 @@ async function login(
   baseUrl: string,
   socketAddress = "127.0.0.1",
   forwardedFor?: string,
+  password = "wrong-password",
 ) {
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -58,7 +59,53 @@ async function login(
   return fetch(baseUrl + "/_devtools/api/auth/login", {
     method: "POST",
     headers,
-    body: JSON.stringify({ username: "admin", password: "wrong-password" }),
+    body: JSON.stringify({ username: "admin", password }),
+  });
+}
+
+async function loginWithBody(
+  baseUrl: string,
+  body: string,
+  socketAddress = "127.0.0.1",
+) {
+  return fetch(baseUrl + "/_devtools/api/auth/login", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-test-remote-address": socketAddress,
+    },
+    body,
+  });
+}
+
+async function sendMalformedLogin(
+  baseUrl: string,
+  socketAddress: string,
+) {
+  const address = new URL(baseUrl);
+
+  await new Promise<void>((resolve, reject) => {
+    const request = http.request({
+      hostname: address.hostname,
+      port: address.port,
+      path: "/_devtools/api/auth/login",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-test-remote-address": socketAddress,
+      },
+    });
+    request.on("error", () => undefined);
+    request.end('{"username":', () => {
+      setTimeout(() => {
+        request.destroy();
+        resolve();
+      }, 25);
+    });
+    request.once("timeout", () => {
+      request.destroy();
+      reject(new Error("malformed login request timed out"));
+    });
   });
 }
 
@@ -162,4 +209,50 @@ test("returns a generic 503 when the limiter fails unexpectedly", async (t) => {
   assert.deepEqual(await response.json(), {
     message: "Unable to process login request",
   });
+});
+
+test("refunds exactly one point after a successful login", async (t) => {
+  const { baseUrl } = await startDashboard(t);
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    assert.equal((await login(baseUrl, "127.0.0.3", undefined, "correct-password")).status, 200);
+  }
+});
+
+test("successful login does not erase previous failed attempts", async (t) => {
+  const { baseUrl } = await startDashboard(t);
+
+  assert.equal((await login(baseUrl, "127.0.0.4")).status, 401);
+  assert.equal((await login(baseUrl, "127.0.0.4", undefined, "correct-password")).status, 200);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    assert.equal((await login(baseUrl, "127.0.0.4")).status, 401);
+  }
+
+  assert.equal((await login(baseUrl, "127.0.0.4")).status, 429);
+});
+
+test("refund failures do not break a successful login", async (t) => {
+  const { baseUrl, dashboard } = await startDashboard(t);
+  const limiter = (dashboard as unknown as {
+    loginRateLimiter: { reward: () => Promise<unknown> };
+  }).loginRateLimiter;
+  limiter.reward = async () => {
+    throw new Error("unexpected refund failure");
+  };
+
+  assert.equal((await login(baseUrl, "127.0.0.6", undefined, "correct-password")).status, 200);
+});
+
+test("failed and malformed submissions retain their consumed points", async (t) => {
+  const { baseUrl } = await startDashboard(t);
+
+  assert.equal((await loginWithBody(baseUrl, JSON.stringify({ username: "admin" }), "127.0.0.5")).status, 400);
+  await sendMalformedLogin(baseUrl, "127.0.0.5");
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    assert.equal((await login(baseUrl, "127.0.0.5")).status, 401);
+  }
+
+  assert.equal((await login(baseUrl, "127.0.0.5")).status, 429);
 });

@@ -121,10 +121,10 @@ export default class DashboardServer {
 
     private async handleLogin(req: IncomingMessage,
         res: ServerResponse) {
+        const rateLimitKey = normalizeRemoteAddress(req.socket.remoteAddress);
+
         try {
-            await this.loginRateLimiter.consume(
-                normalizeRemoteAddress(req.socket.remoteAddress),
-            );
+            await this.loginRateLimiter.consume(rateLimitKey);
         } catch (error) {
             if (error instanceof RateLimiterRes) {
                 res.statusCode = 429;
@@ -194,6 +194,15 @@ export default class DashboardServer {
             res.end(JSON.stringify({ message: "Unable to create session" }));
             return;
         }
+
+        try {
+            await this.loginRateLimiter.reward(rateLimitKey, 1);
+        } catch (error) {
+            debugLog("Dashboard login rate-limit refund failed", {
+                errorName: error instanceof Error ? error.name : typeof error,
+            });
+        }
+
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.setHeader(
