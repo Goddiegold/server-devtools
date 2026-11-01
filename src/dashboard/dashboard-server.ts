@@ -23,8 +23,6 @@ const sourceBuildDashboardDirectory = path.resolve(__dirname, "../../dist/dashbo
 const dashboardDirectory = existsSync(path.join(sourceBuildDashboardDirectory, "index.html"))
     ? sourceBuildDashboardDirectory
     : path.resolve(__dirname, "../../dashboard");
-const MAX_TRACKED_LOGIN_RATE_LIMIT_KEYS = 1_000;
-
 export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
@@ -37,7 +35,7 @@ export default class DashboardServer {
         blockDuration: Config.DASHBOARD_LOGIN_RATE_LIMIT.BLOCK_SECONDS,
     });
     private readonly trackedLoginRateLimitKeys = new Map<string, number>();
-    private maxTrackedLoginRateLimitKeys = MAX_TRACKED_LOGIN_RATE_LIMIT_KEYS;
+    private maxTrackedLoginRateLimitKeys = Config.DASHBOARD_LOGIN_RATE_LIMIT.MAX_TRACKED_KEYS;
     // private server?: Server;
 
 

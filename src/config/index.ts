@@ -21,6 +21,7 @@ export default {
         POINTS: 5,
         DURATION_SECONDS: 15 * 60,
         BLOCK_SECONDS: 15 * 60,
+        MAX_TRACKED_KEYS: 1_000,
     },
     REQUEST_METHOD: {
         GET: 'GET',
