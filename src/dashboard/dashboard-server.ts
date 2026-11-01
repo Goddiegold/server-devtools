@@ -23,6 +23,14 @@ const sourceBuildDashboardDirectory = path.resolve(__dirname, "../../dist/dashbo
 const dashboardDirectory = existsSync(path.join(sourceBuildDashboardDirectory, "index.html"))
     ? sourceBuildDashboardDirectory
     : path.resolve(__dirname, "../../dashboard");
+
+class LoginBodyTooLargeError extends Error {
+    constructor() {
+        super("Dashboard login body exceeds the configured limit");
+        this.name = "LoginBodyTooLargeError";
+    }
+}
+
 export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
@@ -47,23 +55,75 @@ export default class DashboardServer {
 
     private readJsonBody(
         req: IncomingMessage,
+        maxBytes: number,
     ): Promise<unknown> {
         return new Promise((resolve, reject) => {
-            let body = "";
+            const contentLengthHeader = req.headers["content-length"];
+            const contentLengthValue = Array.isArray(contentLengthHeader)
+                ? contentLengthHeader[0]
+                : contentLengthHeader;
+            const contentLength = contentLengthValue === undefined
+                ? undefined
+                : Number(contentLengthValue);
 
-            req.on("data", (chunk) => {
-                body += chunk.toString();
-            });
+            if (contentLength !== undefined &&
+                Number.isFinite(contentLength) &&
+                contentLength > maxBytes) {
+                req.resume();
+                reject(new LoginBodyTooLargeError());
+                return;
+            }
 
-            req.on("end", () => {
+            const chunks: Buffer[] = [];
+            let bytes = 0;
+            let settled = false;
+
+            const cleanup = () => {
+                req.off("data", onData);
+                req.off("end", onEnd);
+                req.off("error", onError);
+            };
+
+            const fail = (error: unknown) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+
+            const onData = (chunk: Buffer | string) => {
+                const buffer = Buffer.isBuffer(chunk)
+                    ? chunk
+                    : Buffer.from(chunk);
+                bytes += buffer.byteLength;
+
+                if (bytes > maxBytes) {
+                    fail(new LoginBodyTooLargeError());
+                    req.resume();
+                    return;
+                }
+
+                chunks.push(buffer);
+            };
+
+            const onEnd = () => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+
                 try {
+                    const body = Buffer.concat(chunks).toString("utf8");
                     resolve(body ? JSON.parse(body) : {});
                 } catch (error) {
                     reject(error);
                 }
-            });
+            };
 
-            req.on("error", reject);
+            const onError = (error: Error) => fail(error);
+
+            req.on("data", onData);
+            req.on("end", onEnd);
+            req.on("error", onError);
         });
     }
 
@@ -224,10 +284,32 @@ export default class DashboardServer {
             return;
         }
 
-        const body = await this.readJsonBody(req) as {
+        let body: {
             username?: string;
             password?: string;
         } | null;
+
+        try {
+            body = await this.readJsonBody(
+                req,
+                Config.DASHBOARD_LOGIN_BODY_LIMIT_BYTES,
+            ) as {
+                username?: string;
+                password?: string;
+            } | null;
+        } catch (error) {
+            if (error instanceof LoginBodyTooLargeError) {
+                res.statusCode = 413;
+                res.setHeader("Content-Type", "application/json");
+                res.setHeader("Cache-Control", "no-store");
+                res.end(JSON.stringify({
+                    message: "Login request body is too large",
+                }));
+                return;
+            }
+
+            throw error;
+        }
 
         const username = body?.username || null
         const password = body?.password || null

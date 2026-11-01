@@ -4,6 +4,7 @@ import { test, type TestContext } from "node:test";
 
 import DashboardServer from "../src/dashboard/dashboard-server";
 import AuthService from "../src/security/auth.service";
+import Config from "../src/config";
 import SQLiteStorage from "../src/storage/sqlite-storage";
 
 async function startDashboard(t: TestContext) {
@@ -106,6 +107,33 @@ async function sendMalformedLogin(
       request.destroy();
       reject(new Error("malformed login request timed out"));
     });
+  });
+}
+
+async function sendChunkedLoginBody(
+  baseUrl: string,
+  chunks: string[],
+  socketAddress: string,
+) {
+  const address = new URL(baseUrl);
+
+  return new Promise<http.IncomingMessage>((resolve, reject) => {
+    const request = http.request({
+      hostname: address.hostname,
+      port: address.port,
+      path: "/_devtools/api/auth/login",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "transfer-encoding": "chunked",
+        "x-test-remote-address": socketAddress,
+      },
+    }, resolve);
+    request.once("error", reject);
+    for (const chunk of chunks) {
+      request.write(chunk);
+    }
+    request.end();
   });
 }
 
@@ -331,4 +359,55 @@ test("successful-login refunds keep the tracked record until it expires", async 
 
   t.mock.timers.setTime(15 * 60 * 1000 + 1);
   assert.equal((await login(baseUrl, "127.0.4.2")).status, 401);
+});
+
+test("accepts login JSON below and exactly at the 8 KiB limit", async (t) => {
+  const { baseUrl, authService } = await startDashboard(t);
+  let validationCalls = 0;
+  const originalValidateCredentials = authService.validateCredentials.bind(authService);
+  authService.validateCredentials = (...args) => {
+    validationCalls += 1;
+    return originalValidateCredentials(...args);
+  };
+
+  const validBody = JSON.stringify({ username: "admin", password: "wrong-password" });
+  const exactBody = validBody + " ".repeat(
+    Config.DASHBOARD_LOGIN_BODY_LIMIT_BYTES - Buffer.byteLength(validBody),
+  );
+
+  assert.equal((await loginWithBody(baseUrl, validBody, "127.0.5.1")).status, 401);
+  assert.equal((await loginWithBody(baseUrl, exactBody, "127.0.5.2")).status, 401);
+  assert.equal(validationCalls, 2);
+});
+
+test("rejects oversized declared and chunked login bodies before validation", async (t) => {
+  const { baseUrl, authService } = await startDashboard(t);
+  let validationCalls = 0;
+  authService.validateCredentials = () => {
+    validationCalls += 1;
+    return false;
+  };
+
+  const oversizedBody = JSON.stringify({
+    username: "admin",
+    password: "wrong-password",
+    padding: "x".repeat(Config.DASHBOARD_LOGIN_BODY_LIMIT_BYTES),
+  });
+  const declaredResponse = await loginWithBody(baseUrl, oversizedBody, "127.0.5.3");
+  assert.equal(declaredResponse.status, 413);
+  assert.deepEqual(await declaredResponse.json(), {
+    message: "Login request body is too large",
+  });
+
+  const chunkedResponse = await sendChunkedLoginBody(
+    baseUrl,
+    [
+      "{\"username\":\"admin\",\"password\":\"wrong-password\",\"padding\":\"",
+      "x".repeat(Config.DASHBOARD_LOGIN_BODY_LIMIT_BYTES),
+      "\"}",
+    ],
+    "127.0.5.4",
+  );
+  assert.equal(chunkedResponse.statusCode, 413);
+  assert.equal(validationCalls, 0);
 });

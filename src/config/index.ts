@@ -23,6 +23,7 @@ export default {
         BLOCK_SECONDS: 15 * 60,
         MAX_TRACKED_KEYS: 1_000,
     },
+    DASHBOARD_LOGIN_BODY_LIMIT_BYTES: 8 * 1024,
     REQUEST_METHOD: {
         GET: 'GET',
         POST: 'POST',
