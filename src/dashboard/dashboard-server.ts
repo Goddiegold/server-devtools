@@ -23,6 +23,7 @@ const sourceBuildDashboardDirectory = path.resolve(__dirname, "../../dist/dashbo
 const dashboardDirectory = existsSync(path.join(sourceBuildDashboardDirectory, "index.html"))
     ? sourceBuildDashboardDirectory
     : path.resolve(__dirname, "../../dashboard");
+const MAX_TRACKED_LOGIN_RATE_LIMIT_KEYS = 1_000;
 
 export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
@@ -35,6 +36,8 @@ export default class DashboardServer {
         duration: Config.DASHBOARD_LOGIN_RATE_LIMIT.DURATION_SECONDS,
         blockDuration: Config.DASHBOARD_LOGIN_RATE_LIMIT.BLOCK_SECONDS,
     });
+    private readonly trackedLoginRateLimitKeys = new Map<string, number>();
+    private maxTrackedLoginRateLimitKeys = MAX_TRACKED_LOGIN_RATE_LIMIT_KEYS;
     // private server?: Server;
 
 
@@ -119,25 +122,96 @@ export default class DashboardServer {
         return;
     }
 
+    private reclaimExpiredLoginRateLimitKeys(now: number): void {
+        for (const [key, expiresAt] of this.trackedLoginRateLimitKeys) {
+            if (expiresAt <= now) {
+                this.trackedLoginRateLimitKeys.delete(key);
+            }
+        }
+    }
+
+    private getLoginRateLimitCapacityRetryAfterMs(now: number): number {
+        let earliestExpiry = Number.POSITIVE_INFINITY;
+
+        for (const expiresAt of this.trackedLoginRateLimitKeys.values()) {
+            earliestExpiry = Math.min(earliestExpiry, expiresAt);
+        }
+
+        if (!Number.isFinite(earliestExpiry)) {
+            return Config.DASHBOARD_LOGIN_RATE_LIMIT.DURATION_SECONDS * 1000;
+        }
+
+        return Math.max(1, earliestExpiry - now);
+    }
+
+    private trackLoginRateLimitKey(
+        key: string,
+        msBeforeNext: number,
+        now = Date.now(),
+    ): void {
+        this.trackedLoginRateLimitKeys.set(
+            key,
+            now + Math.max(1, msBeforeNext),
+        );
+    }
+
+    private sendLoginRateLimitResponse(
+        res: ServerResponse,
+        msBeforeNext: number,
+    ): void {
+        res.statusCode = 429;
+        res.setHeader("Retry-After", Math.max(
+            1,
+            Math.ceil(msBeforeNext / 1000),
+        ));
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.end(JSON.stringify({
+            message: "Too many login attempts",
+        }));
+    }
+
     private async handleLogin(req: IncomingMessage,
         res: ServerResponse) {
         const rateLimitKey = normalizeRemoteAddress(req.socket.remoteAddress);
+        const now = Date.now();
+        this.reclaimExpiredLoginRateLimitKeys(now);
+
+        const wasTracked = this.trackedLoginRateLimitKeys.has(rateLimitKey);
+        if (!wasTracked) {
+            if (this.trackedLoginRateLimitKeys.size >= this.maxTrackedLoginRateLimitKeys) {
+                this.sendLoginRateLimitResponse(
+                    res,
+                    this.getLoginRateLimitCapacityRetryAfterMs(now),
+                );
+                return;
+            }
+
+            this.trackLoginRateLimitKey(
+                rateLimitKey,
+                Config.DASHBOARD_LOGIN_RATE_LIMIT.DURATION_SECONDS * 1000,
+                now,
+            );
+        }
 
         try {
-            await this.loginRateLimiter.consume(rateLimitKey);
+            const consumeResult = await this.loginRateLimiter.consume(rateLimitKey);
+            this.trackLoginRateLimitKey(
+                rateLimitKey,
+                consumeResult.msBeforeNext,
+            );
         } catch (error) {
             if (error instanceof RateLimiterRes) {
-                res.statusCode = 429;
-                res.setHeader("Retry-After", Math.max(
-                    1,
-                    Math.ceil(error.msBeforeNext / 1000),
-                ));
-                res.setHeader("Content-Type", "application/json");
-                res.setHeader("Cache-Control", "no-store");
-                res.end(JSON.stringify({
-                    message: "Too many login attempts",
-                }));
+                this.trackLoginRateLimitKey(
+                    rateLimitKey,
+                    error.msBeforeNext,
+                );
+                this.sendLoginRateLimitResponse(res, error.msBeforeNext);
                 return;
+            }
+
+            if (!wasTracked) {
+                this.trackedLoginRateLimitKeys.delete(rateLimitKey);
             }
 
             debugLog("Dashboard login rate-limit failed", {
@@ -196,7 +270,11 @@ export default class DashboardServer {
         }
 
         try {
-            await this.loginRateLimiter.reward(rateLimitKey, 1);
+            const rewardResult = await this.loginRateLimiter.reward(rateLimitKey, 1);
+            this.trackLoginRateLimitKey(
+                rateLimitKey,
+                rewardResult.msBeforeNext,
+            );
         } catch (error) {
             debugLog("Dashboard login rate-limit refund failed", {
                 errorName: error instanceof Error ? error.name : typeof error,

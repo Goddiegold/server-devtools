@@ -109,6 +109,24 @@ async function sendMalformedLogin(
   });
 }
 
+function setTrackedKeyCapacity(
+  dashboard: DashboardServer,
+  capacity: number,
+) {
+  (dashboard as unknown as {
+    maxTrackedLoginRateLimitKeys: number;
+  }).maxTrackedLoginRateLimitKeys = capacity;
+}
+
+function setBlockDuration(
+  dashboard: DashboardServer,
+  durationSeconds: number,
+) {
+  (dashboard as unknown as {
+    loginRateLimiter: { blockDuration: number };
+  }).loginRateLimiter.blockDuration = durationSeconds;
+}
+
 test("admits five login attempts and blocks the sixth before parsing the body", async (t) => {
   const { baseUrl, authService } = await startDashboard(t);
   let validationCalls = 0;
@@ -255,4 +273,62 @@ test("failed and malformed submissions retain their consumed points", async (t) 
   }
 
   assert.equal((await login(baseUrl, "127.0.0.5")).status, 429);
+});
+
+test("does not exceed the tracked IP capacity under concurrent requests", async (t) => {
+  const { baseUrl, dashboard } = await startDashboard(t);
+  setTrackedKeyCapacity(dashboard, 2);
+
+  const responses = await Promise.all(
+    Array.from({ length: 6 }, (_, index) => login(baseUrl, `127.0.1.${index + 1}`)),
+  );
+
+  assert.equal(responses.filter(response => response.status === 401).length, 2);
+  assert.equal(responses.filter(response => response.status === 429).length, 4);
+});
+
+test("rejects a new IP when capacity is full and keeps existing IP limits active", async (t) => {
+  const { baseUrl, dashboard } = await startDashboard(t);
+  setTrackedKeyCapacity(dashboard, 1);
+
+  assert.equal((await login(baseUrl, "127.0.2.1")).status, 401);
+  assert.equal((await login(baseUrl, "127.0.2.2")).status, 429);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    assert.equal((await login(baseUrl, "127.0.2.1")).status, 401);
+  }
+
+  assert.equal((await login(baseUrl, "127.0.2.1")).status, 429);
+});
+
+test("reclaims expired capacity without removing an active extended block", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 0 });
+  const { baseUrl, dashboard } = await startDashboard(t);
+  setTrackedKeyCapacity(dashboard, 2);
+  setBlockDuration(dashboard, 30 * 60);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    assert.equal((await login(baseUrl, "127.0.3.1")).status, 401);
+  }
+  assert.equal((await login(baseUrl, "127.0.3.1")).status, 429);
+  assert.equal((await login(baseUrl, "127.0.3.2")).status, 401);
+
+  t.mock.timers.setTime(15 * 60 * 1000 + 1);
+
+  assert.equal((await login(baseUrl, "127.0.3.3")).status, 401);
+  const blockedResponse = await login(baseUrl, "127.0.3.1");
+  assert.equal(blockedResponse.status, 429);
+  assert.ok(Number(blockedResponse.headers.get("retry-after")) > 1);
+});
+
+test("successful-login refunds keep the tracked record until it expires", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 0 });
+  const { baseUrl, dashboard } = await startDashboard(t);
+  setTrackedKeyCapacity(dashboard, 1);
+
+  assert.equal((await login(baseUrl, "127.0.4.1", undefined, "correct-password")).status, 200);
+  assert.equal((await login(baseUrl, "127.0.4.2")).status, 429);
+
+  t.mock.timers.setTime(15 * 60 * 1000 + 1);
+  assert.equal((await login(baseUrl, "127.0.4.2")).status, 401);
 });
