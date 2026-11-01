@@ -31,6 +31,20 @@ class LoginBodyTooLargeError extends Error {
     }
 }
 
+class LoginBodyReadTimeoutError extends Error {
+    constructor() {
+        super("Dashboard login body read timed out");
+        this.name = "LoginBodyReadTimeoutError";
+    }
+}
+
+class LoginBodyClientDisconnectedError extends Error {
+    constructor() {
+        super("Dashboard login client disconnected");
+        this.name = "LoginBodyClientDisconnectedError";
+    }
+}
+
 export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
@@ -44,6 +58,7 @@ export default class DashboardServer {
     });
     private readonly trackedLoginRateLimitKeys = new Map<string, number>();
     private maxTrackedLoginRateLimitKeys = Config.DASHBOARD_LOGIN_RATE_LIMIT.MAX_TRACKED_KEYS;
+    private loginBodyReadTimeoutMs = Config.DASHBOARD_LOGIN_BODY_READ_TIMEOUT_MS;
     // private server?: Server;
 
 
@@ -56,6 +71,7 @@ export default class DashboardServer {
     private readJsonBody(
         req: IncomingMessage,
         maxBytes: number,
+        timeoutMs: number,
     ): Promise<unknown> {
         return new Promise((resolve, reject) => {
             const contentLengthHeader = req.headers["content-length"];
@@ -77,11 +93,18 @@ export default class DashboardServer {
             const chunks: Buffer[] = [];
             let bytes = 0;
             let settled = false;
+            let timeout: NodeJS.Timeout | undefined;
 
             const cleanup = () => {
+                if (timeout) {
+                    clearTimeout(timeout);
+                    timeout = undefined;
+                }
                 req.off("data", onData);
                 req.off("end", onEnd);
                 req.off("error", onError);
+                req.off("aborted", onAborted);
+                req.off("close", onClose);
             };
 
             const fail = (error: unknown) => {
@@ -119,11 +142,23 @@ export default class DashboardServer {
                 }
             };
 
-            const onError = (error: Error) => fail(error);
+            const onError = () => fail(new LoginBodyClientDisconnectedError());
+            const onAborted = () => fail(new LoginBodyClientDisconnectedError());
+            const onClose = () => {
+                if (!settled) {
+                    fail(new LoginBodyClientDisconnectedError());
+                }
+            };
 
             req.on("data", onData);
             req.on("end", onEnd);
             req.on("error", onError);
+            req.on("aborted", onAborted);
+            req.on("close", onClose);
+            timeout = setTimeout(() => {
+                fail(new LoginBodyReadTimeoutError());
+                req.resume();
+            }, timeoutMs);
         });
     }
 
@@ -293,6 +328,7 @@ export default class DashboardServer {
             body = await this.readJsonBody(
                 req,
                 Config.DASHBOARD_LOGIN_BODY_LIMIT_BYTES,
+                this.loginBodyReadTimeoutMs,
             ) as {
                 username?: string;
                 password?: string;
@@ -305,6 +341,24 @@ export default class DashboardServer {
                 res.end(JSON.stringify({
                     message: "Login request body is too large",
                 }));
+                return;
+            }
+
+            if (error instanceof LoginBodyReadTimeoutError) {
+                res.statusCode = 408;
+                res.setHeader("Content-Type", "application/json");
+                res.setHeader("Cache-Control", "no-store");
+                res.setHeader("Connection", "close");
+                res.end(JSON.stringify({
+                    message: "Login request timed out",
+                }), () => {
+                    req.destroy();
+                    res.socket?.destroy();
+                });
+                return;
+            }
+
+            if (error instanceof LoginBodyClientDisconnectedError) {
                 return;
             }
 

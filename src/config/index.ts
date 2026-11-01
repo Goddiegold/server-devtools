@@ -24,6 +24,7 @@ export default {
         MAX_TRACKED_KEYS: 1_000,
     },
     DASHBOARD_LOGIN_BODY_LIMIT_BYTES: 8 * 1024,
+    DASHBOARD_LOGIN_BODY_READ_TIMEOUT_MS: 10 * 1000,
     REQUEST_METHOD: {
         GET: 'GET',
         POST: 'POST',
