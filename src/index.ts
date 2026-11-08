@@ -67,14 +67,43 @@ class ServerDevTools {
         await this.instrumentation.start();
     }
 
-    handle(req: IncomingMessage, res: ServerResponse) {
-        return this.dashboard.handle(req, res);
+    handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+        let result: unknown;
+
+        try {
+            result = this.dashboard.handle(req, res);
+        } catch (error) {
+            this.handleDashboardFailure(res, error);
+            return Promise.resolve();
+        }
+
+        return Promise.resolve(result).then(
+            () => undefined,
+            error => this.handleDashboardFailure(res, error),
+        );
+    }
+
+    private handleDashboardFailure(res: ServerResponse, error: unknown): void {
+        debugLog("Dashboard request failed", {
+            errorName: error instanceof Error ? error.name : typeof error,
+        });
+
+        if (!res.headersSent) {
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.end(JSON.stringify({ message: "Internal Server Error" }));
+            return;
+        }
+
+        if (!res.writableEnded) {
+            res.end();
+        }
     }
 
     middleware(req: IncomingMessage, res: ServerResponse, next: () => void) {
         if (req?.url?.startsWith("/_devtools") === true) {
-            //maybe call the handle func
-            this.handle(req, res);
+            void this.handle(req, res);
             return;
         }
 

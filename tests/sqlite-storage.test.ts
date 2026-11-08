@@ -623,7 +623,7 @@ function getTableNames(database: DatabaseSync): string[] {
 
         const database = new DatabaseSync(temporaryDatabase.path);
 
-        assert.equal(getUserVersion(database), 1);
+        assert.equal(getUserVersion(database), 2);
 
         const tableNames = getTableNames(database);
 
@@ -633,6 +633,7 @@ function getTableNames(database: DatabaseSync): string[] {
             "trace_metadata",
             "sessions",
             "http_client_details",
+            "auth_credentials",
         ]) {
             assert.ok(tableNames.includes(tableName));
         }
@@ -707,7 +708,7 @@ function getTableNames(database: DatabaseSync): string[] {
         const storage = new SQLiteStorage(temporaryDatabase.path);
         const database = new DatabaseSync(temporaryDatabase.path);
 
-        assert.equal(getUserVersion(database), 1);
+        assert.equal(getUserVersion(database), 2);
         assert.equal(
             database
                 .prepare("SELECT path FROM traces WHERE trace_id = ?")
@@ -727,6 +728,7 @@ function getTableNames(database: DatabaseSync): string[] {
             "trace_metadata",
             "sessions",
             "http_client_details",
+            "auth_credentials",
         ]) {
             assert.ok(getTableNames(database).includes(tableName));
         }
@@ -766,7 +768,7 @@ function getTableNames(database: DatabaseSync): string[] {
         const reopenedStorage = new SQLiteStorage(temporaryDatabase.path);
         const database = new DatabaseSync(temporaryDatabase.path);
 
-        assert.equal(getUserVersion(database), 1);
+        assert.equal(getUserVersion(database), 2);
         assert.equal(
             reopenedStorage.getTraceSummaries()[0]?.traceId,
             "versioned-trace",
@@ -777,6 +779,116 @@ function getTableNames(database: DatabaseSync): string[] {
     } finally {
         rmSync(temporaryDatabase.directory, { recursive: true, force: true });
     }
+}
+
+function createVersionOneDatabase(path: string): void {
+    // Version 2 only adds auth_credentials, so dropping it reproduces the
+    // exact version 1 schema.
+    new SQLiteStorage(path).close();
+
+    const database = new DatabaseSync(path);
+    database.exec(`
+        DROP TABLE auth_credentials;
+        PRAGMA user_version = 1;
+
+        INSERT INTO traces (trace_id, started_at, path, created_at)
+        VALUES ('v1-trace', 1000, '/v1', 1000);
+
+        INSERT INTO trace_metadata (trace_id, request_body)
+        VALUES ('v1-trace', '{"hello":"world"}');
+
+        INSERT INTO sessions (session_hash, username, created_at, expires_at)
+        VALUES ('v1-session', 'admin', 1000, 9999999999999);
+    `);
+    database.close();
+}
+
+{
+    const temporaryDatabase = createTemporaryDatabasePath(
+        "server-devtools-v1-upgrade-",
+    );
+
+    try {
+        createVersionOneDatabase(temporaryDatabase.path);
+
+        const storage = new SQLiteStorage(temporaryDatabase.path);
+        const database = new DatabaseSync(temporaryDatabase.path);
+
+        assert.equal(getUserVersion(database), 2);
+        assert.ok(getTableNames(database).includes("auth_credentials"));
+        assert.deepEqual(
+            getTableColumns(database, "auth_credentials"),
+            ["id", "salt", "hash", "updated_at"],
+        );
+        assert.equal(storage.getAuthCredentialVerifier(), undefined);
+        assert.equal(storage.getTraceSummaries()[0]?.traceId, "v1-trace");
+        assert.deepEqual(storage.getTraceMetadata("v1-trace")?.request?.body, { hello: "world" });
+        assert.equal(storage.getSessionByHash("v1-session")?.username, "admin");
+
+        storage.close();
+        database.close();
+    } finally {
+        rmSync(temporaryDatabase.directory, { recursive: true, force: true });
+    }
+}
+
+{
+    const temporaryDatabase = createTemporaryDatabasePath(
+        "server-devtools-v1-upgrade-failure-",
+    );
+
+    try {
+        createVersionOneDatabase(temporaryDatabase.path);
+
+        const conflicting = new DatabaseSync(temporaryDatabase.path);
+        conflicting.exec("CREATE INDEX auth_credentials ON traces(started_at)");
+        conflicting.close();
+
+        assert.throws(
+            () => new SQLiteStorage(temporaryDatabase.path),
+            /already an index named auth_credentials/,
+        );
+
+        const afterFailure = new DatabaseSync(temporaryDatabase.path);
+        assert.equal(getUserVersion(afterFailure), 1);
+        assert.equal(getTableNames(afterFailure).includes("auth_credentials"), false);
+        assert.equal(
+            afterFailure.prepare("SELECT COUNT(*) AS count FROM traces").get()?.count,
+            1,
+        );
+        assert.equal(
+            afterFailure.prepare("SELECT COUNT(*) AS count FROM sessions").get()?.count,
+            1,
+        );
+        afterFailure.exec("DROP INDEX auth_credentials");
+        afterFailure.close();
+
+        const retried = new SQLiteStorage(temporaryDatabase.path);
+        const database = new DatabaseSync(temporaryDatabase.path);
+        assert.equal(getUserVersion(database), 2);
+        assert.equal(retried.getTraceSummaries()[0]?.traceId, "v1-trace");
+        retried.close();
+        database.close();
+    } finally {
+        rmSync(temporaryDatabase.directory, { recursive: true, force: true });
+    }
+}
+
+{
+    const storage = new SQLiteStorage(":memory:");
+    const now = 1_000_000;
+
+    storage.saveSession({ sessionHash: "expired", username: "admin", createdAt: 0, expiresAt: now - 1 });
+    storage.saveSession({ sessionHash: "boundary", username: "admin", createdAt: 0, expiresAt: now });
+    storage.saveSession({ sessionHash: "valid", username: "admin", createdAt: 0, expiresAt: now + 1 });
+
+    assert.equal(storage.deleteExpiredSessions(now), 2);
+    assert.equal(storage.deleteExpiredSessions(now), 0);
+    assert.equal(storage.getSessionByHash("expired"), undefined);
+    assert.equal(storage.getSessionByHash("boundary"), undefined);
+    assert.ok(storage.getSessionByHash("valid"));
+
+    storage.close();
 }
 
 /**

@@ -45,6 +45,13 @@ class LoginBodyClientDisconnectedError extends Error {
     }
 }
 
+class LoginBodyInvalidJsonError extends Error {
+    constructor() {
+        super("Dashboard login body is not valid JSON");
+        this.name = "LoginBodyInvalidJsonError";
+    }
+}
+
 export default class DashboardServer {
     private readonly executionTreeBuilder = new ExecutionTreeBuilder();
     private readonly requestDetailMapper = new DashboardRequestDetailMapper();
@@ -137,8 +144,8 @@ export default class DashboardServer {
                 try {
                     const body = Buffer.concat(chunks).toString("utf8");
                     resolve(body ? JSON.parse(body) : {});
-                } catch (error) {
-                    reject(error);
+                } catch {
+                    reject(new LoginBodyInvalidJsonError());
                 }
             };
 
@@ -176,7 +183,11 @@ export default class DashboardServer {
             const [key, ...valueParts] = cookie.trim().split("=");
 
             if (key === name) {
-                return decodeURIComponent(valueParts.join("="));
+                try {
+                    return decodeURIComponent(valueParts.join("="));
+                } catch {
+                    return undefined;
+                }
             }
         }
 
@@ -362,11 +373,21 @@ export default class DashboardServer {
                 return;
             }
 
+            if (error instanceof LoginBodyInvalidJsonError) {
+                res.statusCode = 400;
+                res.setHeader("Content-Type", "application/json");
+                res.setHeader("Cache-Control", "no-store");
+                res.end(JSON.stringify({
+                    message: "Login request body must be valid JSON",
+                }));
+                return;
+            }
+
             throw error;
         }
 
-        const username = body?.username || null
-        const password = body?.password || null
+        const username = typeof body?.username === "string" ? body.username : null
+        const password = typeof body?.password === "string" ? body.password : null
 
         if (!username || !password) {
             res.statusCode = 400;

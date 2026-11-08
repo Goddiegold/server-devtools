@@ -62,3 +62,9 @@ export interface ISession {
     createdAt: number;
     expiresAt: number;
 }
+
+export interface IAuthCredentialVerifier {
+    salt: string;
+    hash: string;
+    updatedAt: number;
+}

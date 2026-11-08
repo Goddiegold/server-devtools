@@ -48,7 +48,8 @@ export default {
     ],
     NATIVE_HTTP_BODY_LIMIT_BYTES: 256 * 1024,
     STORAGE: {
-        SCHEMA_VERSION: 1
+        SCHEMA_VERSION: 2,
+        BUSY_TIMEOUT_MS: 5_000,
     },
     REDACTED_KEY: "[REDACTED]"
 }

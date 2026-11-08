@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { DashboardOverviewRange, IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, IOverviewMetrics, ISession, ITraceMetadata, ITraceSummary } from "../types";
+import { DashboardOverviewRange, IAuthCredentialVerifier, IDevToolsCurrentUser, IDevToolsSpan, IDevToolsTrace, IHttpClientDetails, IOverviewMetrics, ISession, ITraceMetadata, ITraceSummary } from "../types";
 import EncryptDecryptService from "../security/encrypt-decrypt.service";
 import Config from "../config";
 
@@ -114,25 +114,70 @@ export default class SQLiteStorage {
         }
     }
 
-    private initialize(): void {
-        const version = this.getSchemaVersion();
+    private initializeV2Schema(): void {
+        this.db.exec(`
+        CREATE TABLE IF NOT EXISTS auth_credentials (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            salt TEXT NOT NULL,
+            hash TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+    `);
+    }
 
-        if (version === Config.STORAGE.SCHEMA_VERSION) {
+    private initialize(): void {
+        if (this.getSchemaVersion() >= Config.STORAGE.SCHEMA_VERSION) {
             return;
         }
 
-        if (version === 0) {
-            this.db.exec("BEGIN");
+        this.runImmediateTransaction(() => {
+            // Another process may have migrated while this one waited for the lock.
+            const version = this.getSchemaVersion();
+
+            if (version >= Config.STORAGE.SCHEMA_VERSION) {
+                return;
+            }
+
+            if (version < 1) {
+                this.initializeV1Schema();
+            }
+
+            if (version < 2) {
+                this.initializeV2Schema();
+            }
+
+            this.setSchemaVersion(Config.STORAGE.SCHEMA_VERSION);
+        });
+    }
+
+    // Takes the write lock up front and waits for other processes holding it,
+    // so read-check-write sequences cannot interleave across connections.
+    private runImmediateTransaction<T>(operation: () => T): T {
+        const { timeout: previousTimeout } = this.db
+            .prepare("PRAGMA busy_timeout")
+            .get() as { timeout: number };
+
+        this.db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.floor(Config.STORAGE.BUSY_TIMEOUT_MS))}`);
+
+        try {
+            this.db.exec("BEGIN IMMEDIATE");
 
             try {
-                this.initializeV1Schema();
-                this.setSchemaVersion(1);
-
+                const result = operation();
                 this.db.exec("COMMIT");
+                return result;
             } catch (error) {
-                this.db.exec("ROLLBACK");
+                if (this.db.isTransaction) {
+                    try {
+                        this.db.exec("ROLLBACK");
+                    } catch {
+                        // Preserve the original failure.
+                    }
+                }
                 throw error;
             }
+        } finally {
+            this.db.exec(`PRAGMA busy_timeout = ${previousTimeout}`);
         }
     }
 
@@ -756,6 +801,77 @@ export default class SQLiteStorage {
             DELETE FROM sessions
             WHERE session_hash = ?
         `).run(sessionHash);
+    }
+
+    deleteExpiredSessions(now: number): number {
+        const result = this.db.prepare(`
+            DELETE FROM sessions
+            WHERE expires_at <= ?
+        `).run(now);
+
+        return Number(result.changes);
+    }
+
+    getAuthCredentialVerifier(): IAuthCredentialVerifier | undefined {
+        const row = this.db.prepare(`
+            SELECT salt, hash, updated_at
+            FROM auth_credentials
+            WHERE id = 1
+        `).get() as { salt: string; hash: string; updated_at: number } | undefined;
+
+        if (!row) return undefined;
+
+        return {
+            salt: row.salt,
+            hash: row.hash,
+            updatedAt: row.updated_at,
+        };
+    }
+
+    reconcileAuthCredentialVerifier(
+        matches: (stored: IAuthCredentialVerifier) => boolean,
+        createVerifier: () => IAuthCredentialVerifier,
+    ): IAuthCredentialVerifier {
+        return this.runImmediateTransaction(() => {
+            const stored = this.getAuthCredentialVerifier();
+
+            if (stored && matches(stored)) {
+                return stored;
+            }
+
+            const verifier = createVerifier();
+
+            this.db.exec("DELETE FROM sessions");
+            this.db.prepare(`
+                INSERT OR REPLACE INTO auth_credentials (
+                    id,
+                    salt,
+                    hash,
+                    updated_at
+                )
+                VALUES (1, ?, ?, ?)
+            `).run(verifier.salt, verifier.hash, verifier.updatedAt);
+
+            return verifier;
+        });
+    }
+
+    saveSessionForVerifier(
+        session: ISession,
+        verifier: IAuthCredentialVerifier,
+        now: number,
+    ): boolean {
+        return this.runImmediateTransaction(() => {
+            const stored = this.getAuthCredentialVerifier();
+
+            if (!stored || stored.salt !== verifier.salt || stored.hash !== verifier.hash) {
+                return false;
+            }
+
+            this.deleteExpiredSessions(now);
+            this.saveSession(session);
+            return true;
+        });
     }
 
     saveCurrentUser(
