@@ -15,7 +15,8 @@ It gives you a live dashboard for inspecting:
 -   outgoing HTTP requests
 -   database operations
 -   errors
--   timing
+-   timing and slow-span highlighting in execution traces
+-   repeated SQL, MongoDB, and Redis commands within a single request
 -   current/authenticated user context
 -   server-side request search
 -   request filtering by HTTP method and status
@@ -135,6 +136,46 @@ redaction: {
 
 Header redaction applies to header names only. It does not redact body fields,
 URLs, query parameters, or arbitrary span attributes.
+
+`allowedIPs` is optional. When provided, only dashboard requests from those IP
+addresses can reach `/_devtools`, including login and authenticated API routes.
+Requests are evaluated against the socket remote address. `X-Forwarded-For` and
+other forwarded headers are not trusted by default. Individual IPv4 and IPv6
+addresses are supported. Omit `allowedIPs` or pass an empty array to keep the
+existing unrestricted dashboard access behavior. Keep the list in an environment
+variable as a comma-separated string:
+
+```sh
+SERVER_DEVTOOLS_ALLOWED_IPS=192.168.1.10,203.0.113.15,::1
+```
+
+```ts
+const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME!,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+  },
+  allowedIPs: process.env.SERVER_DEVTOOLS_ALLOWED_IPS
+    ? process.env.SERVER_DEVTOOLS_ALLOWED_IPS.split(",")
+        .map((ip) => ip.trim())
+        .filter(Boolean)
+    : undefined,
+});
+```
+
+`slowSpanThresholdMs` is optional. Spans at or above this duration are marked as
+slow in the execution view (default `500`). When omitted, the SDK reads
+`SERVER_DEVTOOLS_SLOW_SPAN_THRESHOLD_MS` if set.
+
+```ts
+const devtools = new ServerDevTools({
+  auth: {
+    username: process.env.SERVER_DEVTOOLS_USERNAME!,
+    password: process.env.SERVER_DEVTOOLS_PASSWORD!,
+  },
+  slowSpanThresholdMs: 750,
+});
+```
 
 `getCurrentUser` is optional. Use it when your application already exposes the
 authenticated user on the request; ServerDevTools does not require a
@@ -564,6 +605,10 @@ Redis command spans include command inspection, arguments, timings, request
 links, and command errors. Redis (ioredis) support has been verified in
 Express and NestJS applications, including pipelines and transactions.
 
+The execution view groups identical database or Redis operations that repeat
+within one request and surfaces **Repeated** / **Repeated Command** badges,
+including a Redis summary with count and cumulative duration.
+
 ------------------------------------------------------------------------
 
 ## What ServerDevTools Is Not
@@ -614,10 +659,19 @@ ServerDevTools may capture sensitive application data, including request
 headers, request bodies, response bodies, database operations, and
 external request metadata.
 
+The embedded dashboard adds username/password sessions (24-hour expiry,
+hashed tokens, logout and expired-session cleanup), login rate limiting and
+brute-force protection, bounded per-IP login tracking, login body-size and
+read-timeout limits, safe handling of malformed login JSON and session
+cookies, session invalidation when dashboard credentials change, and
+cross-process session verification against stored credentials. Optional
+`allowedIPs` restricts dashboard access to listed socket remote addresses;
+forwarded headers such as `X-Forwarded-For` are not trusted by default.
+
 Optional encryption at rest can protect configured fields in supported
 captured data. It does not redact all captured data or replace application
-security practices. The dashboard has authentication; use strong credentials
-and restrict access to `/_devtools` through your network and deployment setup.
+security practices. Use strong credentials and restrict access to
+`/_devtools` through your network and deployment setup.
 
 Header-name redaction is available for configured HTTP headers, but body,
 URL, query-parameter, and arbitrary span-attribute redaction are not

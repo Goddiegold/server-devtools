@@ -33,4 +33,5 @@ export interface IServerDevlToolsParams {
         req: IncomingMessage,
     ) => IDevToolsCurrentUser | undefined;
     slowSpanThresholdMs?: number;
+    allowedIPs?: string[];
 }

@@ -13,6 +13,7 @@ import DashboardResponseDetailMapper from "./dashboard-response-detail-mapper";
 import AuthService from "../security/auth.service";
 import { ISession } from "../types";
 import { debugLog } from "../utils/logger";
+import { isRequestIpAllowed } from "../utils/allowed-ips";
 import { normalizeRemoteAddress } from "../utils/helpers";
 import {
     RateLimiterMemory,
@@ -73,7 +74,17 @@ export default class DashboardServer {
         private readonly storage: SQLiteStorage,
         private readonly authService: AuthService,
         private readonly slowSpanThresholdMs = Config.DEFAULT_SLOW_SPAN_THRESHOLD_MS,
+        private readonly allowedIPs?: Set<string>,
     ) {
+    }
+
+    private sendIpForbidden(res: ServerResponse): void {
+        res.statusCode = 403;
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.end(JSON.stringify({
+            message: "Forbidden",
+        }));
     }
 
     private readJsonBody(
@@ -513,6 +524,11 @@ export default class DashboardServer {
         res: ServerResponse,) {
         const requestUrl = req.url ?? '';
         const pathname = requestUrl.split('?')[0];
+
+        if (!isRequestIpAllowed(req.socket.remoteAddress, this.allowedIPs)) {
+            this.sendIpForbidden(res);
+            return;
+        }
 
         if (
             req.method === "POST" &&

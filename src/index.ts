@@ -12,6 +12,7 @@ import { resolveSlowSpanThresholdMs } from "./core/slow-span";
 import AuthService from "./security/auth.service";
 import RedactionService from "./security/redaction.service";
 import { debugLog } from "./utils/logger";
+import { parseAllowedIps } from "./utils/allowed-ips";
 
 class ServerDevTools {
     private instrumentation: Instrumentation;
@@ -52,6 +53,8 @@ class ServerDevTools {
 
         this.authService = new AuthService(auth.username, auth.password, this.storage)
 
+        const allowedIPs = parseAllowedIps(options.allowedIPs);
+
         this.instrumentation = new Instrumentation(
             this.storage,
             redactionService,
@@ -60,6 +63,7 @@ class ServerDevTools {
             this.storage,
             this.authService,
             resolveSlowSpanThresholdMs(options.slowSpanThresholdMs),
+            allowedIPs,
         );
 
         this.getCurrentUser = options.getCurrentUser;
