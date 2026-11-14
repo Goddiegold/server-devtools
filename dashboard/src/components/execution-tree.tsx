@@ -1,3 +1,5 @@
+import { Badge } from "@/components/ui/badge"
+import { DEFAULT_SLOW_SPAN_THRESHOLD_MS, isSlowSpan } from "@/lib/slow-span"
 import type { IExecutionNode } from "@/types"
 
 function spanAttribute(span: IExecutionNode["span"], key: string) {
@@ -63,6 +65,7 @@ interface ExecutionTreeProps {
   nodes: IExecutionNode[]
   selectedSpanId?: string
   onSelectSpan?: (span: IExecutionNode["span"]) => void
+  slowSpanThresholdMs?: number
 }
 
 function ExecutionTreeNode({
@@ -72,16 +75,19 @@ function ExecutionTreeNode({
   selectedSpanId,
   onSelectSpan,
   rootRequestDurationMs,
+  slowSpanThresholdMs,
 }: Omit<ExecutionTreeProps, "nodes"> & {
   node: IExecutionNode
   depth?: number
   isLast?: boolean
   rootRequestDurationMs: number
+  slowSpanThresholdMs: number
 }) {
   const hasError = Boolean(node.span.error) || node.span.status.code === 2
   const typeLabel = spanTypeLabel(node.span)
   const isSelectable = node.span.type === "database" || node.span.type === "http.client"
   const isSelected = node.span.spanId === selectedSpanId
+  const isSlow = !hasError && isSlowSpan(node.span.durationMs, slowSpanThresholdMs)
   const durationMs = Number.isFinite(node.span.durationMs)
     ? Math.max(0, node.span.durationMs)
     : 0
@@ -94,20 +100,41 @@ function ExecutionTreeNode({
   )
   const connector = depth === 0 ? null : isLast ? "└──" : "├──"
   const row = (
-    <div className={`rounded px-2 py-1.5 text-sm ${isSelected ? "bg-muted" : hasError ? "bg-destructive/10 text-destructive" : "hover:bg-muted/40"}`}>
+    <div
+      className={`rounded px-2 py-1.5 text-sm ${
+        isSelected
+          ? "bg-muted"
+          : hasError
+            ? "bg-destructive/10 text-destructive"
+            : isSlow
+              ? "border border-warning/20 bg-warning/10"
+              : "hover:bg-muted/40"
+      }`}
+    >
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
           {connector && <span className="shrink-0 font-mono text-muted-foreground">{connector}</span>}
           {typeLabel && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">{typeLabel}</span>}
+          {isSlow && (
+            <Badge
+              variant="outline"
+              className="h-auto shrink-0 border-warning/30 bg-warning/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-warning"
+            >
+              Slow
+            </Badge>
+          )}
           <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
         </div>
-        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+        <span className={`shrink-0 font-mono text-xs ${isSlow ? "font-medium text-warning" : "text-muted-foreground"}`}>
           {formatDuration(durationMs)}{percentage !== undefined && ` (${percentage.toFixed(1)}%)`}
         </span>
       </div>
       {hasTimingBar && (
         <div className="ml-1 mt-1 h-0.5 overflow-hidden rounded-full bg-muted/70" aria-label={`${percentage.toFixed(1)}% of request duration`}>
-          <div className="h-full rounded-full bg-muted-foreground/60" style={{ width: `${Math.min(100, percentage)}%` }} />
+          <div
+            className={`h-full rounded-full ${isSlow ? "bg-warning/80" : "bg-muted-foreground/60"}`}
+            style={{ width: `${Math.min(100, percentage)}%` }}
+          />
         </div>
       )}
     </div>
@@ -137,6 +164,7 @@ function ExecutionTreeNode({
               selectedSpanId={selectedSpanId}
               onSelectSpan={onSelectSpan}
               rootRequestDurationMs={rootRequestDurationMs}
+              slowSpanThresholdMs={slowSpanThresholdMs}
             />
           ))}
         </div>
@@ -145,7 +173,12 @@ function ExecutionTreeNode({
   )
 }
 
-export function ExecutionTree({ nodes, selectedSpanId, onSelectSpan }: ExecutionTreeProps) {
+export function ExecutionTree({
+  nodes,
+  selectedSpanId,
+  onSelectSpan,
+  slowSpanThresholdMs = DEFAULT_SLOW_SPAN_THRESHOLD_MS,
+}: ExecutionTreeProps) {
   const rootRequestDurationMs = nodes.find((node) => node.span.type === "http.server")?.span.durationMs
     ?? nodes[0]?.span.durationMs
     ?? 0
@@ -160,6 +193,7 @@ export function ExecutionTree({ nodes, selectedSpanId, onSelectSpan }: Execution
           selectedSpanId={selectedSpanId}
           onSelectSpan={onSelectSpan}
           rootRequestDurationMs={rootRequestDurationMs}
+          slowSpanThresholdMs={slowSpanThresholdMs}
         />
       ))}
     </div>

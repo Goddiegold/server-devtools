@@ -8,6 +8,7 @@ import { IServerDevlToolsParams } from "./types";
 import SQLiteStorage from "./storage/sqlite-storage";
 import EncryptDecryptService from "./security/encrypt-decrypt.service";
 import Config from "./config";
+import { resolveSlowSpanThresholdMs } from "./core/slow-span";
 import AuthService from "./security/auth.service";
 import RedactionService from "./security/redaction.service";
 import { debugLog } from "./utils/logger";
@@ -57,7 +58,8 @@ class ServerDevTools {
         );
         this.dashboard = new DashboardServer(
             this.storage,
-            this.authService
+            this.authService,
+            resolveSlowSpanThresholdMs(options.slowSpanThresholdMs),
         );
 
         this.getCurrentUser = options.getCurrentUser;

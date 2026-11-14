@@ -1,5 +1,9 @@
 import type { IDevToolsCurrentUser } from "./traces.types"
 
+export interface IDashboardConfig {
+  slowSpanThresholdMs: number
+}
+
 export interface IDashboardRequest {
   id: string
   method: string

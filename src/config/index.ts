@@ -7,6 +7,7 @@ export default {
         TRACES: '/_devtools/api/traces',
         REQUESTS: '/_devtools/api/requests',
         OVERVIEW: '/_devtools/api/overview',
+        CONFIG: '/_devtools/api/config',
         AUTH: '/_devtools/api/auth'
     },
     DASHBOARD_CONTENT_TYPES: {
@@ -51,5 +52,6 @@ export default {
         SCHEMA_VERSION: 2,
         BUSY_TIMEOUT_MS: 5_000,
     },
-    REDACTED_KEY: "[REDACTED]"
+    REDACTED_KEY: "[REDACTED]",
+    DEFAULT_SLOW_SPAN_THRESHOLD_MS: 500,
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 
+import { getDashboardConfig } from "@/api/config"
 import { getExecutionTree } from "@/api/execution"
 import {
   clearHistory,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { ExecutionTree } from "@/components/execution-tree"
 import { DatabaseDetails } from "@/components/database-details"
 import { HttpClientDetails } from "@/components/http-client-details"
+import { DEFAULT_SLOW_SPAN_THRESHOLD_MS } from "@/lib/slow-span"
 import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
 import { Loader2, Trash2 } from "lucide-react"
 
@@ -235,6 +237,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
   const [executionTree, setExecutionTree] = useState<IExecutionNode[] | null>(null)
   const [executionLoading, setExecutionLoading] = useState(false)
   const [executionError, setExecutionError] = useState<string | null>(null)
+  const [slowSpanThresholdMs, setSlowSpanThresholdMs] = useState(DEFAULT_SLOW_SPAN_THRESHOLD_MS)
   const [selectedSpan, setSelectedSpan] = useState<IDevToolsSpan | null>(null)
   const [request, setRequest] = useState<ITraceRequest | null>(null)
   const [requestLoading, setRequestLoading] = useState(false)
@@ -303,6 +306,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
       setError(null)
       setExecutionTree(null)
       setExecutionError(null)
+      setSlowSpanThresholdMs(DEFAULT_SLOW_SPAN_THRESHOLD_MS)
       setSelectedSpan(null)
       setRequest(null)
       setRequestError(null)
@@ -347,10 +351,11 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
 
     let active = true
 
-    void getExecutionTree(traceId)
-      .then((data) => {
+    void Promise.all([getExecutionTree(traceId), getDashboardConfig()])
+      .then(([data, config]) => {
         if (active) {
           setExecutionTree(data)
+          setSlowSpanThresholdMs(config.slowSpanThresholdMs)
         }
       })
       .catch((executionFetchError) => {
@@ -640,6 +645,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                     nodes={executionTree}
                     selectedSpanId={selectedSpan?.spanId}
                     onSelectSpan={setSelectedSpan}
+                    slowSpanThresholdMs={slowSpanThresholdMs}
                   />
                   {selectedSpan?.type === "database" && (
                     <DatabaseDetails span={selectedSpan} />

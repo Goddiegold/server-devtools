@@ -1,5 +1,9 @@
 import { IDevToolsSpanType } from "./span";
 
+export interface IDashboardConfig {
+  slowSpanThresholdMs: number;
+}
+
 export interface IDashboardRequest {
   id: string;
 

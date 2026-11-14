@@ -71,7 +71,8 @@ export default class DashboardServer {
 
     constructor(
         private readonly storage: SQLiteStorage,
-        private readonly authService: AuthService
+        private readonly authService: AuthService,
+        private readonly slowSpanThresholdMs = Config.DEFAULT_SLOW_SPAN_THRESHOLD_MS,
     ) {
     }
 
@@ -542,6 +543,19 @@ export default class DashboardServer {
             pathname === `${Config.DASHBOARD_API_ROUTES.AUTH}/profile`
         ) {
             return this.handleProfile(req, res);
+        }
+
+        if (
+            req.method === Config.REQUEST_METHOD.GET &&
+            pathname === Config.DASHBOARD_API_ROUTES.CONFIG
+        ) {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.end(JSON.stringify({
+                slowSpanThresholdMs: this.slowSpanThresholdMs,
+            }));
+            return;
         }
 
         if (

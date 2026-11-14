@@ -297,6 +297,15 @@ async function bootstrap() {
     });
   });
 
+  app.get("/slow", async (_req, res) => {
+    await new Promise((resolve) => setTimeout(resolve, 750));
+
+    res.json({
+      ok: true,
+      delayedMs: 750,
+    });
+  });
+
   app.get("/error-test", () => {
     throw new Error("ServerDevTools test error");
   });

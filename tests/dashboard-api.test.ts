@@ -386,6 +386,13 @@ async function run() {
     for (const span of executionTrace.spans) storage.saveSpan(span);
     storage.saveTraceSummary(executionTrace.spans[0]);
 
+    const configResponse = await apiFetch('/_devtools/api/config');
+
+    assert.equal(configResponse.status, 200);
+    assert.deepEqual(await configResponse.json(), {
+      slowSpanThresholdMs: 500,
+    });
+
     const executionResponse = await apiFetch('/_devtools/api/traces/trace-execution/execution');
 
     assert.equal(executionResponse.status, 200);

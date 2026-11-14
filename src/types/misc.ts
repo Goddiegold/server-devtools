@@ -32,4 +32,5 @@ export interface IServerDevlToolsParams {
     getCurrentUser?: (
         req: IncomingMessage,
     ) => IDevToolsCurrentUser | undefined;
+    slowSpanThresholdMs?: number;
 }
