@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { getDashboardConfig } from "@/api/config"
 import { getExecutionTree } from "@/api/execution"
@@ -19,6 +19,11 @@ import { Button } from "@/components/ui/button"
 import { ExecutionTree } from "@/components/execution-tree"
 import { DatabaseDetails } from "@/components/database-details"
 import { HttpClientDetails } from "@/components/http-client-details"
+import {
+  buildRedisSpanRepeatStats,
+  countDatabaseSpanRepeats,
+  summarizeRedisCommandRepeats,
+} from "@/lib/repeated-database-queries"
 import { DEFAULT_SLOW_SPAN_THRESHOLD_MS } from "@/lib/slow-span"
 import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
 import { Loader2, Trash2 } from "lucide-react"
@@ -506,6 +511,18 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
       attributeString(item, "url.hostname") ?? urlHost ?? item.name
   }))]
   const isRequestError = errorSpans.length > 0 || (status !== undefined && Number(status) >= 400)
+  const databaseRepeatCounts = useMemo(
+    () => countDatabaseSpanRepeats(trace?.spans ?? []),
+    [trace],
+  )
+  const redisRepeatSummaries = useMemo(
+    () => summarizeRedisCommandRepeats(trace?.spans ?? []),
+    [trace],
+  )
+  const redisSpanRepeatStats = useMemo(
+    () => buildRedisSpanRepeatStats(trace?.spans ?? []),
+    [trace],
+  )
 
   return (
     <main className="p-6">
@@ -641,14 +658,48 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
 
               {!executionLoading && !executionError && executionTree && executionTree.length > 0 && (
                 <>
+                  {redisRepeatSummaries.length > 0 && (
+                    <div className="mb-4 space-y-2 rounded-md border border-info/20 bg-info/10 p-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-info">
+                        Repeated Redis Commands
+                      </h3>
+                      <ul className="space-y-1 text-sm">
+                        {redisRepeatSummaries.map((summary) => (
+                          <li key={summary.groupKey} className="flex flex-wrap items-center gap-2 font-mono">
+                            <Badge
+                              variant="outline"
+                              className="border-info/30 bg-info/15 text-info"
+                            >
+                              Repeated Command
+                            </Badge>
+                            <span>{summary.command}</span>
+                            <span className="text-muted-foreground">
+                              {summary.pattern}
+                            </span>
+                            <span className="text-muted-foreground">
+                              ×{summary.count}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {summary.totalDurationMs.toFixed(2)}ms total
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <ExecutionTree
                     nodes={executionTree}
                     selectedSpanId={selectedSpan?.spanId}
                     onSelectSpan={setSelectedSpan}
                     slowSpanThresholdMs={slowSpanThresholdMs}
+                    databaseRepeatCounts={databaseRepeatCounts}
                   />
                   {selectedSpan?.type === "database" && (
-                    <DatabaseDetails span={selectedSpan} />
+                    <DatabaseDetails
+                      span={selectedSpan}
+                      repeatCount={databaseRepeatCounts.get(selectedSpan.spanId)}
+                      redisRepeatStats={redisSpanRepeatStats.get(selectedSpan.spanId)}
+                    />
                   )}
                   {selectedSpan?.type === "http.client" && (
                     <HttpClientDetails

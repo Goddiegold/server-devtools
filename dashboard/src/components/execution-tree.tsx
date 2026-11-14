@@ -7,6 +7,10 @@ function spanAttribute(span: IExecutionNode["span"], key: string) {
   return value === undefined || value === null ? undefined : String(value)
 }
 
+function isRedisSpan(span: IExecutionNode["span"]) {
+  return span.type === "database" && spanAttribute(span, "db.system.name") === "redis"
+}
+
 function getSpanLabel(span: IExecutionNode["span"]): string {
   switch (span.type) {
     case "http.server": {
@@ -47,7 +51,7 @@ function spanTypeLabel(span: IExecutionNode["span"]) {
   const type = span.type
   switch (type) {
     case "database":
-      return "DATABASE"
+      return isRedisSpan(span) ? "REDIS" : "DATABASE"
     case "http.client":
       return "EXTERNAL API"
     case "http.server":
@@ -66,6 +70,7 @@ interface ExecutionTreeProps {
   selectedSpanId?: string
   onSelectSpan?: (span: IExecutionNode["span"]) => void
   slowSpanThresholdMs?: number
+  databaseRepeatCounts?: ReadonlyMap<string, number>
 }
 
 function ExecutionTreeNode({
@@ -76,18 +81,23 @@ function ExecutionTreeNode({
   onSelectSpan,
   rootRequestDurationMs,
   slowSpanThresholdMs,
+  databaseRepeatCounts,
 }: Omit<ExecutionTreeProps, "nodes"> & {
   node: IExecutionNode
   depth?: number
   isLast?: boolean
   rootRequestDurationMs: number
   slowSpanThresholdMs: number
+  databaseRepeatCounts?: ReadonlyMap<string, number>
 }) {
   const hasError = Boolean(node.span.error) || node.span.status.code === 2
   const typeLabel = spanTypeLabel(node.span)
   const isSelectable = node.span.type === "database" || node.span.type === "http.client"
   const isSelected = node.span.spanId === selectedSpanId
   const isSlow = !hasError && isSlowSpan(node.span.durationMs, slowSpanThresholdMs)
+  const repeatCount = databaseRepeatCounts?.get(node.span.spanId)
+  const isRepeated = node.span.type === "database" && repeatCount !== undefined && repeatCount >= 2
+  const repeatedBadgeLabel = isRedisSpan(node.span) ? "Repeated Command" : "Repeated"
   const durationMs = Number.isFinite(node.span.durationMs)
     ? Math.max(0, node.span.durationMs)
     : 0
@@ -108,13 +118,23 @@ function ExecutionTreeNode({
             ? "bg-destructive/10 text-destructive"
             : isSlow
               ? "border border-warning/20 bg-warning/10"
-              : "hover:bg-muted/40"
+              : isRepeated
+                ? "border border-info/20 bg-info/10"
+                : "hover:bg-muted/40"
       }`}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
           {connector && <span className="shrink-0 font-mono text-muted-foreground">{connector}</span>}
           {typeLabel && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">{typeLabel}</span>}
+          {isRepeated && (
+            <Badge
+              variant="outline"
+              className="h-auto shrink-0 border-info/30 bg-info/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-info"
+            >
+              {repeatedBadgeLabel}{repeatCount !== undefined ? ` ×${repeatCount}` : ""}
+            </Badge>
+          )}
           {isSlow && (
             <Badge
               variant="outline"
@@ -165,6 +185,7 @@ function ExecutionTreeNode({
               onSelectSpan={onSelectSpan}
               rootRequestDurationMs={rootRequestDurationMs}
               slowSpanThresholdMs={slowSpanThresholdMs}
+              databaseRepeatCounts={databaseRepeatCounts}
             />
           ))}
         </div>
@@ -178,6 +199,7 @@ export function ExecutionTree({
   selectedSpanId,
   onSelectSpan,
   slowSpanThresholdMs = DEFAULT_SLOW_SPAN_THRESHOLD_MS,
+  databaseRepeatCounts,
 }: ExecutionTreeProps) {
   const rootRequestDurationMs = nodes.find((node) => node.span.type === "http.server")?.span.durationMs
     ?? nodes[0]?.span.durationMs
@@ -194,6 +216,7 @@ export function ExecutionTree({
           onSelectSpan={onSelectSpan}
           rootRequestDurationMs={rootRequestDurationMs}
           slowSpanThresholdMs={slowSpanThresholdMs}
+          databaseRepeatCounts={databaseRepeatCounts}
         />
       ))}
     </div>

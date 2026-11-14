@@ -261,6 +261,28 @@ async function bootstrap() {
     }
   });
 
+  app.get("/repeated-redis", async (_req, res) => {
+    try {
+      const keys = ["user:1", "user:2", "user:3"];
+      let commandCount = 0;
+
+      for (const key of keys) {
+        await redis.get(key);
+        commandCount += 1;
+      }
+
+      res.json({
+        ok: true,
+        database: "redis",
+        repeatedQueries: commandCount,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   app.get("/redis-failed", async (_req, res) => {
     try {
       await redis.call("SERVERDEVTOOLS_INVALID_COMMAND");
@@ -304,6 +326,84 @@ async function bootstrap() {
       ok: true,
       delayedMs: 750,
     });
+  });
+
+  app.get("/repeated-postgres", async (_req, res) => {
+    try {
+      const ids = [1, 2, 3];
+      let rowCount = 0;
+
+      for (const id of ids) {
+        const result = await postgresPool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [id],
+        );
+        rowCount += result.rows.length;
+      }
+
+      res.json({
+        ok: true,
+        database: "postgresql",
+        repeatedQueries: ids.length,
+        rowCount,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/repeated-mysql2", async (_req, res) => {
+    try {
+      const ids = [1, 2, 3];
+      let rowCount = 0;
+
+      for (const id of ids) {
+        const [rows] = await mysql2Pool.execute(
+          "SELECT * FROM users WHERE id = ?",
+          [id],
+        );
+        rowCount += Array.isArray(rows) ? rows.length : 0;
+      }
+
+      res.json({
+        ok: true,
+        database: "mysql2",
+        repeatedQueries: ids.length,
+        rowCount,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/repeated-mongodb", async (_req, res) => {
+    try {
+      const userIds = [1, 2, 3];
+      let docCount = 0;
+
+      for (const userId of userIds) {
+        const docs = await users
+          .find({ userId })
+          .limit(5)
+          .toArray();
+        docCount += docs.length;
+      }
+
+      res.json({
+        ok: true,
+        database: "mongodb",
+        repeatedQueries: userIds.length,
+        docCount,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   });
 
   app.get("/error-test", () => {

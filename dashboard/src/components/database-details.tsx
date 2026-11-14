@@ -30,15 +30,40 @@ function KeyValueRows({ values }: { values: Record<string, string> }) {
   )
 }
 
-export function DatabaseDetails({ span }: { span: IDevToolsSpan }) {
-  const details = definedValues([
-      ["System", attributeString(span, "db.system.name")],
-      ["Operation", attributeString(span, "db.operation.name")],
-      ["Database", attributeString(span, "db.namespace")],
-      ["Collection", attributeString(span, "db.collection.name")],
-      ["Duration", formatDuration(span.durationMs)],
-      ["Status", span.status.code === 0 ? "Success" : span.status.message ?? "Error"],
-    ])
+export function DatabaseDetails({
+  span,
+  repeatCount,
+  redisRepeatStats,
+}: {
+  span: IDevToolsSpan
+  repeatCount?: number
+  redisRepeatStats?: {
+    command: string
+    pattern: string
+    count: number
+    totalDurationMs: number
+  }
+}) {
+  const isRedis = attributeString(span, "db.system.name") === "redis"
+  const detailRows: Array<[string, string | undefined]> = [
+    ["System", attributeString(span, "db.system.name")],
+    ["Operation", attributeString(span, "db.operation.name")],
+    ["Database", attributeString(span, "db.namespace")],
+    ["Collection", attributeString(span, "db.collection.name")],
+    ["Duration", formatDuration(span.durationMs)],
+    ["Status", span.status.code === 0 ? "Success" : span.status.message ?? "Error"],
+  ]
+
+  if (redisRepeatStats) {
+    detailRows.push(["Command", redisRepeatStats.command])
+    detailRows.push(["Command pattern", redisRepeatStats.pattern])
+    detailRows.push(["Executions in request", String(redisRepeatStats.count)])
+    detailRows.push(["Cumulative duration", `${redisRepeatStats.totalDurationMs.toFixed(2)}ms`])
+  } else if (repeatCount !== undefined && repeatCount >= 2) {
+    detailRows.push(["Repeated in request", `${repeatCount} times`])
+  }
+
+  const details = definedValues(detailRows)
   const query = attributeString(span, "db.query.text")
   const error = span.error
     ? definedValues([
@@ -49,7 +74,7 @@ export function DatabaseDetails({ span }: { span: IDevToolsSpan }) {
 
   return (
     <div className="mt-4 space-y-5 border-t pt-4">
-      <h3 className="text-sm font-semibold">Database Operation</h3>
+      <h3 className="text-sm font-semibold">{isRedis ? "Redis Command" : "Database Operation"}</h3>
       <KeyValueRows values={details} />
 
       {query !== undefined && (
