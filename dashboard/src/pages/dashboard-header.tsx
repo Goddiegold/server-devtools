@@ -50,8 +50,30 @@ export function DashboardHeader({ onLogout, onNavigate }: DashboardHeaderProps) 
           <img className="size-7" src={logoUrl} alt="" />ServerDevTools
         </button>
         <nav className="flex items-center gap-1 text-sm" aria-label="Dashboard">
-          <button className="rounded px-2 py-1 hover:bg-muted" onClick={() => onNavigate("/_devtools")}>Overview</button>
-          <button className="rounded px-2 py-1 hover:bg-muted" onClick={() => onNavigate("/_devtools/requests")}>Requests</button>
+          <button
+            className="rounded px-2 py-1 hover:bg-muted"
+            onMouseEnter={() => {
+              void import("@/pages/overview-page")
+            }}
+            onFocus={() => {
+              void import("@/pages/overview-page")
+            }}
+            onClick={() => onNavigate("/_devtools")}
+          >
+            Overview
+          </button>
+          <button
+            className="rounded px-2 py-1 hover:bg-muted"
+            onMouseEnter={() => {
+              void import("@/pages/requests-page")
+            }}
+            onFocus={() => {
+              void import("@/pages/requests-page")
+            }}
+            onClick={() => onNavigate("/_devtools/requests")}
+          >
+            Requests
+          </button>
         </nav>
       </div>
 

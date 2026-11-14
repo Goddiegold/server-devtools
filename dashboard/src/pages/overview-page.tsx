@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Activity, AlertCircle, Clock3, Gauge, Loader2, RefreshCw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Activity, AlertCircle, Clock3, Gauge, RefreshCw } from "lucide-react"
 import {
   Area,
   AreaChart,
@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts"
 
+import { OverviewMetricsSkeleton } from "@/components/loading/route-skeletons"
 import { getOverview } from "@/api/overview"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -112,18 +113,35 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
   const [range, setRange] = useState<DashboardOverviewRange>("1h")
   const [metrics, setMetrics] = useState<IOverviewMetrics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const metricsRef = useRef<IOverviewMetrics | null>(null)
+  metricsRef.current = metrics
 
   const loadOverview = useCallback(async () => {
+    const isInitial = metricsRef.current === null
+
     try {
-      setLoading(true)
+      if (isInitial) {
+        setLoading(true)
+      } else {
+        setRefreshing(true)
+      }
       setError(null)
       setMetrics(await getOverview(range))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load overview")
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
+  }, [range])
+
+  useEffect(() => {
+    setMetrics(null)
+    setLoading(true)
+    setRefreshing(false)
+    setError(null)
   }, [range])
 
   useEffect(() => {
@@ -163,13 +181,9 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
         </div>
       </div>
 
-      {loading && !metrics && (
-        <div className="flex min-h-64 items-center justify-center rounded-lg border text-sm text-muted-foreground">
-          <Loader2 className="mr-2 size-4 animate-spin" /> Loading overview...
-        </div>
-      )}
+      {loading && !metrics && <OverviewMetricsSkeleton />}
 
-      {error && (
+      {error && !metrics && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <span className="text-destructive">{error}</span>
           <Button variant="outline" size="sm" onClick={() => void loadOverview()}>
@@ -180,6 +194,25 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
 
       {metrics && (
         <>
+          {refreshing && (
+            <p className="mb-4 text-xs text-muted-foreground" role="status" aria-live="polite">
+              Refreshing metrics…
+            </p>
+          )}
+
+          {error && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+              <span className="text-destructive">{error}</span>
+              <Button variant="outline" size="sm" onClick={() => void loadOverview()}>
+                <RefreshCw /> Try again
+              </Button>
+            </div>
+          )}
+
+          <div
+            className={refreshing ? "opacity-90 motion-safe:transition-opacity" : undefined}
+            aria-busy={refreshing}
+          >
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {cards.map(({ label, value, detail, icon: Icon }) => (
               <div key={label} className="rounded-lg border bg-card p-5">
@@ -235,6 +268,7 @@ export function OverviewPage({ onSelectRequest }: OverviewPageProps) {
                 </div>
               )}
             </section>
+          </div>
           </div>
         </>
       )}

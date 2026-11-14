@@ -140,3 +140,24 @@
     @apply font-sans;
     }
 }
+
+@keyframes content-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .content-reveal {
+    animation: content-reveal 200ms ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .content-reveal {
+      animation: none;
+    }
+  }
+}

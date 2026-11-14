@@ -573,6 +573,16 @@ http://localhost:3000
 └── /_devtools
 ```
 
+The dashboard is a static React UI served from `dist/dashboard` after `npm run build`.
+Overview, Requests, and trace detail views are lazy-loaded so the initial bundle stays
+small; navigation keeps the header visible and shows layout-matched skeleton loaders
+during chunk loads and data fetches. Background polling refreshes overview and requests
+without clearing on-screen data.
+
+When developing the dashboard UI with Vite (`npm --prefix dashboard run dev`), API calls
+proxy to your application's HTTP server (default `http://localhost:3000`). That port must
+serve ServerDevTools middleware, not another local app such as a documentation site.
+
 ------------------------------------------------------------------------
 
 ## Current Support

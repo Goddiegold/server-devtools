@@ -1,13 +1,38 @@
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 
 import { getProfile } from "@/api/auth"
 import { setUnauthorizedHandler } from "@/api/client"
+import { ContentReveal } from "@/components/loading/content-reveal"
+import { LazyRouteFallback } from "@/components/loading/lazy-route-fallback"
+import { DelayedFallback } from "@/components/loading/delayed-fallback"
+import type { DashboardRouteKind } from "@/components/loading/route-skeletons"
+import {
+  DashboardHeaderSkeleton,
+  OverviewPageSkeleton,
+  RequestsPageSkeleton,
+  TraceDetailsPageSkeleton,
+} from "@/components/loading/route-skeletons"
 import type { IDashboardRequest } from "@/types"
 import { DashboardHeader } from "@/pages/dashboard-header"
 import { LoginPage } from "@/pages/login-page"
-import { RequestsPage } from "@/pages/requests-page"
-import { TraceDetailsPage } from "@/pages/trace-details-page"
-import { OverviewPage } from "@/pages/overview-page"
+
+const OverviewPage = lazy(() =>
+  import("@/pages/overview-page").then((module) => ({
+    default: module.OverviewPage,
+  })),
+)
+
+const RequestsPage = lazy(() =>
+  import("@/pages/requests-page").then((module) => ({
+    default: module.RequestsPage,
+  })),
+)
+
+const TraceDetailsPage = lazy(() =>
+  import("@/pages/trace-details-page").then((module) => ({
+    default: module.TraceDetailsPage,
+  })),
+)
 
 const OVERVIEW_PATH = "/_devtools"
 const REQUESTS_PATH = "/_devtools/requests"
@@ -46,12 +71,41 @@ function parseRoute(pathname: string): DashboardRoute {
   return { kind: "not-found" }
 }
 
+function routeKindForSkeleton(route: DashboardRoute): DashboardRouteKind {
+  if (route.kind === "requests") {
+    return "requests"
+  }
+  if (route.kind === "trace") {
+    return "trace"
+  }
+  return "overview"
+}
+
+function AuthCheckingShell({ route }: { route: DashboardRoute }) {
+  const kind = routeKindForSkeleton(route)
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <DashboardHeaderSkeleton />
+      <DelayedFallback delayMs={0} label="Loading dashboard">
+        {kind === "requests" ? (
+          <RequestsPageSkeleton />
+        ) : kind === "trace" ? (
+          <TraceDetailsPageSkeleton />
+        ) : (
+          <OverviewPageSkeleton />
+        )}
+      </DelayedFallback>
+    </div>
+  )
+}
+
 function App() {
   const [authState, setAuthState] = useState<
     "checking" | "authenticated" | "unauthenticated"
   >("checking")
   const [route, setRoute] = useState<DashboardRoute>(() =>
-    parseRoute(window.location.pathname)
+    parseRoute(window.location.pathname),
   )
 
   useEffect(() => {
@@ -117,16 +171,14 @@ function App() {
   }
 
   if (authState === "checking") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading dashboard...
-      </div>
-    )
+    return <AuthCheckingShell route={route} />
   }
 
   if (authState === "unauthenticated") {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />
   }
+
+  const lazyRouteKind = routeKindForSkeleton(route)
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -134,23 +186,7 @@ function App() {
         <DashboardHeader onLogout={handleLogout} onNavigate={navigate} />
       )}
 
-      {route.kind === "overview" && (
-        <OverviewPage onSelectRequest={selectRequest} />
-      )}
-
-      {route.kind === "requests" && (
-        <RequestsPage onSelectRequest={selectRequest} />
-      )}
-
-      {route.kind === "trace" && (
-        <TraceDetailsPage
-          traceId={route.traceId}
-          onBack={backToRequests}
-          onDeleted={() => navigate(REQUESTS_PATH)}
-        />
-      )}
-
-      {route.kind === "not-found" && (
+      {route.kind === "not-found" ? (
         <main className="p-6">
           <div className="rounded-md border p-6">
             <h1 className="text-lg font-semibold">Dashboard page not found</h1>
@@ -162,6 +198,26 @@ function App() {
             </button>
           </div>
         </main>
+      ) : (
+        <Suspense fallback={<LazyRouteFallback kind={lazyRouteKind} />}>
+          <ContentReveal key={route.kind === "trace" ? route.traceId : route.kind}>
+            {route.kind === "overview" && (
+              <OverviewPage onSelectRequest={selectRequest} />
+            )}
+
+            {route.kind === "requests" && (
+              <RequestsPage onSelectRequest={selectRequest} />
+            )}
+
+            {route.kind === "trace" && (
+              <TraceDetailsPage
+                traceId={route.traceId}
+                onBack={backToRequests}
+                onDeleted={() => navigate(REQUESTS_PATH)}
+              />
+            )}
+          </ContentReveal>
+        </Suspense>
       )}
     </div>
   )

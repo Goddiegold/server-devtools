@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { clearHistory, deleteTrace } from "@/api/traces"
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { RequestsTableSkeletonRows } from "@/components/loading/route-skeletons"
 import type { IDashboardRequest } from "@/types"
 import { ArrowDownUp, ChevronDown, ChevronUp, Filter, Loader2, Search, Trash2, X } from "lucide-react"
 
@@ -136,8 +137,11 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [draftTo, setDraftTo] = useState("")
   const [filterError, setFilterError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestsRef = useRef(requests)
+  requestsRef.current = requests
   const [pendingDelete, setPendingDelete] = useState<IDashboardRequest | null>(null)
   const [deletingTraceId, setDeletingTraceId] = useState<string | null>(null)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
@@ -296,8 +300,14 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     let active = true
 
     async function loadRequests() {
+      const isInitial = requestsRef.current.length === 0
+
       try {
-        setLoading(true)
+        if (isInitial) {
+          setLoading(true)
+        } else {
+          setRefreshing(true)
+        }
         const now = Date.now()
         const dateBounds = getDateRangeBounds(dateRange, from, to, now)
         const result = await getRequests(
@@ -327,6 +337,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       } finally {
         if (active) {
           setLoading(false)
+          setRefreshing(false)
         }
       }
     }
@@ -572,8 +583,22 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-md border">
-        <table className="w-full text-sm">
+      {error && requests.length > 0 && (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {refreshing && requests.length > 0 && (
+        <p className="mb-3 text-xs text-muted-foreground" role="status" aria-live="polite">
+          Refreshing requests…
+        </p>
+      )}
+
+      <div
+        className={`overflow-hidden rounded-md border ${refreshing ? "opacity-90 motion-safe:transition-opacity" : ""}`}
+      >
+        <table className="w-full text-sm" aria-busy={loading || refreshing}>
           <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
               <th aria-sort={sortAriaValue("method")} className="px-4 py-3 font-medium">
@@ -647,6 +672,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
           </thead>
 
           <tbody>
+            {loading && requests.length === 0 && <RequestsTableSkeletonRows />}
             {requests.map((request) => (
               <tr
                 key={request.id}
@@ -707,13 +733,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
           </tbody>
         </table>
 
-        {loading && (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            Loading requests...
-          </div>
-        )}
-
-        {error && (
+        {error && requests.length === 0 && (
           <div className="p-6 text-center text-sm text-destructive">{error}</div>
         )}
 

@@ -13,6 +13,8 @@ import {
   type ITraceRequest,
   type ITraceResponse,
 } from "@/api/traces"
+import { TabPanelSkeleton, TraceDetailsContentSkeleton } from "@/components/loading/route-skeletons"
+import { Skeleton } from "@/components/ui/skeleton"
 import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -530,11 +532,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
         ← Back to requests
       </Button>
 
-      {loading && (
-        <div className="rounded-md border p-6 text-sm text-muted-foreground">
-          Loading trace...
-        </div>
-      )}
+      {loading && !trace && <TraceDetailsContentSkeleton />}
 
       {!loading && error && (
         <div className="rounded-md border p-6 text-sm text-destructive">
@@ -641,9 +639,11 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
               <h2 className="mb-3 text-sm font-semibold">Execution</h2>
 
               {executionLoading && (
-                <p className="text-sm text-muted-foreground">
-                  Loading execution data...
-                </p>
+                <div className="space-y-2" role="status" aria-live="polite" aria-label="Loading execution data">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <Skeleton key={index} className="h-10 w-full" style={{ width: `${100 - index * 6}%` }} />
+                  ))}
+                </div>
               )}
 
               {!executionLoading && executionError && (
@@ -714,14 +714,14 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
           ) : activeTab === "Request" ? (
             <section className="mt-6 rounded-md border p-4">
               <h2 className="mb-3 text-sm font-semibold">Request</h2>
-              {requestLoading && <p className="text-sm text-muted-foreground">Loading request data...</p>}
+              {requestLoading && <TabPanelSkeleton />}
               {!requestLoading && requestError && <p className="text-sm text-destructive">{requestError}</p>}
               {!requestLoading && !requestError && request && <RequestDetails request={request} />}
             </section>
           ) : activeTab === "Response" ? (
             <section className="mt-6 rounded-md border p-4">
               <h2 className="mb-3 text-sm font-semibold">Response</h2>
-              {responseLoading && <p className="text-sm text-muted-foreground">Loading response data...</p>}
+              {responseLoading && <TabPanelSkeleton />}
               {!responseLoading && responseError && <p className="text-sm text-destructive">{responseError}</p>}
               {!responseLoading && !responseError && response && <ResponseDetails response={response} />}
             </section>
@@ -739,7 +739,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
           ) : activeTab === "Error" ? (
             <section className="mt-6 rounded-md border p-4">
               <h2 className="mb-3 text-sm font-semibold">Error</h2>
-              {capturedErrorsLoading && <p className="text-sm text-muted-foreground">Loading error data...</p>}
+              {capturedErrorsLoading && <TabPanelSkeleton />}
               {!capturedErrorsLoading && capturedErrorsError && (
                 <p className="text-sm text-destructive">{capturedErrorsError}</p>
               )}
