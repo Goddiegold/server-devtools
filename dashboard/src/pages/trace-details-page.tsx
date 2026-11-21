@@ -29,6 +29,7 @@ import {
   summarizeRedisCommandRepeats,
 } from "@/lib/repeated-database-queries"
 import { DEFAULT_SLOW_SPAN_THRESHOLD_MS } from "@/lib/slow-span"
+import { loadTraceNavigation, traceNavigationPosition } from "@/lib/trace-navigation"
 import type { IDevToolsSpan, IDevToolsTrace, IExecutionNode } from "@/types"
 import { Loader2, Trash2 } from "lucide-react"
 
@@ -36,6 +37,7 @@ interface TraceDetailsPageProps {
   traceId: string
   onBack: () => void
   onDeleted: () => void
+  onNavigateTrace?: (traceId: string) => void
 }
 
 function rootHttpSpan(trace: IDevToolsTrace): IDevToolsSpan | undefined {
@@ -204,41 +206,82 @@ function ResponseDetails({ response }: { response: ITraceResponse }) {
   )
 }
 
-function ErrorDetails({ errors }: { errors: ITraceError[] }) {
+function formatOffsetMs(offsetMs: number) {
+  if (offsetMs < 1000) {
+    return `${offsetMs}ms into request`
+  }
+
+  return `${(offsetMs / 1000).toFixed(2)}s into request`
+}
+
+function ErrorDetails({
+  errors,
+  traceStartedAt,
+  onFocusSpan,
+}: {
+  errors: ITraceError[]
+  traceStartedAt?: number
+  onFocusSpan?: (spanId: string) => void
+}) {
   if (errors.length === 0) {
     return <p className="text-sm text-muted-foreground">No errors captured for this request.</p>
   }
 
   return (
     <div className="space-y-4">
-      {errors.map((capturedError, index) => (
-        <article key={`${capturedError.spanId ?? "error"}-${index}`} className="rounded-md border p-3">
-          <p className="font-mono text-sm font-semibold text-destructive">
-            {capturedError.message ?? "Unknown error"}
-          </p>
-          <div className="mt-3">
-            <KeyValueRows
-              values={Object.fromEntries(
-                ([
-                  ["Type", capturedError.type],
-                  ["Origin", capturedError.spanName],
-                  ["Span Type", capturedError.spanType],
-                ] as const).filter(([, value]) => value !== undefined && value !== "")
+      {errors.map((capturedError, index) => {
+        const offsetMs = capturedError.startedAt !== undefined && traceStartedAt !== undefined
+          ? Math.max(0, capturedError.startedAt - traceStartedAt)
+          : undefined
+
+        return (
+          <article key={`${capturedError.spanId ?? "error"}-${index}`} className="rounded-md border p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="font-mono text-sm font-semibold text-destructive">
+                {capturedError.message ?? "Unknown error"}
+              </p>
+              {capturedError.spanId && onFocusSpan && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onFocusSpan(capturedError.spanId!)}
+                >
+                  View in execution
+                </Button>
               )}
-            />
-          </div>
-          {capturedError.stack && (
-            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/30 p-3 font-mono text-xs">
-              {capturedError.stack}
-            </pre>
-          )}
-        </article>
-      ))}
+            </div>
+            <div className="mt-3">
+              <KeyValueRows
+                values={Object.fromEntries(
+                  ([
+                    ["Type", capturedError.type],
+                    ["Origin", capturedError.spanName],
+                    ["Span Type", capturedError.spanType],
+                    ["Span ID", capturedError.spanId],
+                    ["When", offsetMs !== undefined ? formatOffsetMs(offsetMs) : undefined],
+                  ] as const).filter(([, value]) => value !== undefined && value !== "")
+                )}
+              />
+            </div>
+            {capturedError.stack && (
+              <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/30 p-3 font-mono text-xs">
+                {capturedError.stack}
+              </pre>
+            )}
+          </article>
+        )
+      })}
     </div>
   )
 }
 
-export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPageProps) {
+export function TraceDetailsPage({
+  traceId,
+  onBack,
+  onDeleted,
+  onNavigateTrace,
+}: TraceDetailsPageProps) {
   const [trace, setTrace] = useState<IDevToolsTrace | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -262,6 +305,44 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [destructiveError, setDestructiveError] = useState<string | null>(null)
+  const [pendingFocusSpanId, setPendingFocusSpanId] = useState<string | null>(null)
+  const traceNavigation = useMemo(() => {
+    const context = loadTraceNavigation()
+    return traceNavigationPosition(context, traceId)
+  }, [traceId])
+
+  function focusSpanInExecution(spanId: string) {
+    setPendingFocusSpanId(spanId)
+    if (executionTree === null) {
+      setExecutionLoading(true)
+      setExecutionError(null)
+    }
+    setActiveTab("Execution")
+  }
+
+  useEffect(() => {
+    if (
+      activeTab !== "Execution" ||
+      pendingFocusSpanId === null ||
+      executionTree === null ||
+      !trace
+    ) {
+      return
+    }
+
+    const span = trace.spans.find((item) => item.spanId === pendingFocusSpanId)
+    if (span) {
+      setSelectedSpan(span)
+    }
+
+    const spanId = pendingFocusSpanId
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-span-id="${spanId}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    })
+    setPendingFocusSpanId(null)
+  }, [activeTab, pendingFocusSpanId, executionTree, trace])
 
   async function confirmDelete() {
     if (deletingTrace) {
@@ -324,6 +405,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
       setCapturedErrors(null)
       setCapturedErrorsError(null)
       setActiveTab("Overview")
+      setPendingFocusSpanId(null)
 
       try {
         const data = await getTrace(traceId)
@@ -538,9 +620,34 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
 
   return (
     <main className="p-6">
-      <Button variant="ghost" className="mb-6 -ml-2" onClick={onBack}>
-        ← Back to requests
-      </Button>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <Button variant="ghost" className="-ml-2" onClick={onBack}>
+          ← Back to requests
+        </Button>
+        {traceNavigation && onNavigateTrace && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              Request {traceNavigation.index + 1} of {traceNavigation.total} on this page
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!traceNavigation.previousId}
+              onClick={() => traceNavigation.previousId && onNavigateTrace(traceNavigation.previousId)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!traceNavigation.nextId}
+              onClick={() => traceNavigation.nextId && onNavigateTrace(traceNavigation.nextId)}
+            >
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
 
       {loading && !trace && <TraceDetailsContentSkeleton />}
 
@@ -636,6 +743,13 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                     setCapturedErrorsLoading(true)
                     setCapturedErrorsError(null)
                   }
+                  if (pendingFocusSpanId !== null && tab !== "Execution") {
+                    setPendingFocusSpanId(null)
+                  }
+                  if (tab === "Execution" && pendingFocusSpanId !== null) {
+                    setExecutionLoading(true)
+                    setExecutionError(null)
+                  }
                   setActiveTab(tab)
                 }}
               >
@@ -668,6 +782,15 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
 
               {!executionLoading && !executionError && executionTree && executionTree.length > 0 && (
                 <>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Timeline bars show each span&apos;s share of request duration. Highlights:
+                    {" "}
+                    <span className="text-destructive">errors</span>,
+                    {" "}
+                    <span className="text-warning">slow spans (≥{slowSpanThresholdMs}ms)</span>,
+                    {" "}
+                    <span className="text-info">repeated queries</span>.
+                  </p>
                   {databaseQueryRepeatSummaries.length > 0 && (
                     <div className="mb-4 space-y-2 rounded-md border border-info/20 bg-info/10 p-3">
                       <h3 className="text-xs font-semibold uppercase tracking-wide text-info">
@@ -783,7 +906,11 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                 <p className="text-sm text-destructive">{capturedErrorsError}</p>
               )}
               {!capturedErrorsLoading && !capturedErrorsError && capturedErrors && (
-                <ErrorDetails errors={capturedErrors} />
+                <ErrorDetails
+                  errors={capturedErrors}
+                  traceStartedAt={trace.startedAt}
+                  onFocusSpan={focusSpanInExecution}
+                />
               )}
             </section>
           ) : activeTab === "Overview" ? (

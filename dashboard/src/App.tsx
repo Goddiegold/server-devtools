@@ -214,6 +214,9 @@ function App() {
                 traceId={route.traceId}
                 onBack={backToRequests}
                 onDeleted={() => navigate(REQUESTS_PATH)}
+                onNavigateTrace={(nextTraceId) => {
+                  navigate(`${TRACE_PATH_PREFIX}${encodeURIComponent(nextTraceId)}`)
+                }}
               />
             )}
           </ContentReveal>

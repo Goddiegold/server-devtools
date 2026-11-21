@@ -1113,6 +1113,20 @@ export default class DashboardServer {
                 : /^\d+$/.test(statusValue)
                     ? Number(statusValue)
                     : undefined;
+            const hasErrorValue = searchParams.get("hasError");
+            const hasError = hasErrorValue === null || hasErrorValue === ""
+                ? undefined
+                : hasErrorValue === "1" || hasErrorValue === "true"
+                    ? true
+                    : hasErrorValue === "0" || hasErrorValue === "false"
+                        ? false
+                        : undefined;
+            const minDurationValue = searchParams.get("minDurationMs");
+            const minDurationMs = minDurationValue === null || minDurationValue === ""
+                ? undefined
+                : /^\d+$/.test(minDurationValue)
+                    ? Number(minDurationValue)
+                    : undefined;
 
             if (
                 page === undefined ||
@@ -1123,6 +1137,8 @@ export default class DashboardServer {
                 (fromValue !== null && fromValue !== "" && startedAtFrom === undefined) ||
                 (toValue !== null && toValue !== "" && startedAtTo === undefined) ||
                 (startedAtFrom !== undefined && startedAtTo !== undefined && startedAtFrom > startedAtTo) ||
+                (hasErrorValue !== null && hasErrorValue !== "" && hasError === undefined) ||
+                (minDurationValue !== null && minDurationValue !== "" && minDurationMs === undefined) ||
                 sortField === undefined ||
                 sortDirection === undefined
             ) {
@@ -1156,6 +1172,8 @@ export default class DashboardServer {
                     startedAtTo,
                     sortField,
                     sortDirection,
+                    hasError,
+                    minDurationMs,
                 );
             } catch (error) {
                 debugLog("Trace summary lookup failed", {

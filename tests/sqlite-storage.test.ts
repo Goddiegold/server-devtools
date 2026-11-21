@@ -448,6 +448,65 @@ assert.deepEqual(combinedQueryResult.summaries.map(summary => summary.traceId), 
 assert.equal(combinedQueryResult.total, 1);
 querySearchStorage.close();
 
+const intelligenceFilterStorage = new SQLiteStorage(":memory:");
+for (const request of [
+    { traceId: "intel-fast-clean", startedAt: 1000, durationMs: 50, hasError: false },
+    { traceId: "intel-slow-clean", startedAt: 2000, durationMs: 750, hasError: false },
+    { traceId: "intel-error", startedAt: 3000, durationMs: 120, hasError: true },
+]) {
+    const span: IDevToolsSpan = {
+        traceId: request.traceId,
+        spanId: `${request.traceId}-root`,
+        type: "http.server",
+        name: "GET /intel",
+        startedAt: request.startedAt,
+        durationMs: request.durationMs,
+        attributes: {
+            "http.request.method": "GET",
+            "url.path": `/${request.traceId}`,
+            "http.response.status_code": request.hasError ? 500 : 200,
+        },
+        status: request.hasError ? { code: 2 } : { code: 0 },
+        ...(request.hasError ? { error: { message: "failed" } } : {}),
+    };
+    intelligenceFilterStorage.saveSpan(span);
+    intelligenceFilterStorage.saveTraceSummary(span);
+}
+const errorsOnly = intelligenceFilterStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "startedAt",
+    "desc",
+    true,
+);
+assert.deepEqual(
+    errorsOnly.summaries.map(summary => summary.traceId),
+    ["intel-error"],
+);
+const slowOnly = intelligenceFilterStorage.getPaginatedTraceSummaries(
+    1,
+    20,
+    "",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "durationMs",
+    "desc",
+    undefined,
+    500,
+);
+assert.deepEqual(
+    slowOnly.summaries.map(summary => summary.traceId),
+    ["intel-slow-clean"],
+);
+intelligenceFilterStorage.close();
+
 // Overview aggregation uses one canonical trace row per incoming request,
 // ignores the exclusive upper boundary, and safely handles incomplete rows.
 const overviewStorage = new SQLiteStorage(":memory:");

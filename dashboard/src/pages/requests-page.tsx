@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { RequestsTableSkeletonRows } from "@/components/loading/route-skeletons"
+import { saveTraceNavigation } from "@/lib/trace-navigation"
 import type { IDashboardRequest } from "@/types"
 import { ArrowDownUp, ChevronDown, ChevronUp, Filter, Loader2, Search, Trash2, X } from "lucide-react"
 
@@ -178,6 +179,10 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [draftDateRange, setDraftDateRange] = useState<DateRangePreset>("all")
   const [draftFrom, setDraftFrom] = useState("")
   const [draftTo, setDraftTo] = useState("")
+  const [errorsOnly, setErrorsOnly] = useState(false)
+  const [minDurationMs, setMinDurationMs] = useState("")
+  const [draftErrorsOnly, setDraftErrorsOnly] = useState(false)
+  const [draftMinDurationMs, setDraftMinDurationMs] = useState("")
   const [filterError, setFilterError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(true)
@@ -194,7 +199,9 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const activeFilterCount =
     Number(Boolean(method)) +
     Number(Boolean(status)) +
-    Number(dateRange !== "all")
+    Number(dateRange !== "all") +
+    Number(errorsOnly) +
+    Number(Boolean(minDurationMs.trim()))
 
   function openFilters() {
     setDraftMethod(method)
@@ -202,6 +209,8 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     setDraftDateRange(dateRange)
     setDraftFrom(from)
     setDraftTo(to)
+    setDraftErrorsOnly(errorsOnly)
+    setDraftMinDurationMs(minDurationMs)
     setFilterError(null)
     setFiltersOpen(true)
   }
@@ -222,11 +231,19 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       return
     }
 
+    const trimmedMinDuration = draftMinDurationMs.trim()
+    if (trimmedMinDuration !== "" && !/^\d+$/.test(trimmedMinDuration)) {
+      setFilterError("Minimum duration must be a non-negative whole number of milliseconds.")
+      return
+    }
+
     setMethod(draftMethod)
     setStatus(draftStatus)
     setDateRange(draftDateRange)
     setFrom(draftDateRange === "custom" ? draftFrom : "")
     setTo(draftDateRange === "custom" ? draftTo : "")
+    setErrorsOnly(draftErrorsOnly)
+    setMinDurationMs(trimmedMinDuration)
     setPage(1)
     setFilterError(null)
     setFiltersOpen(false)
@@ -238,11 +255,15 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
     setDraftDateRange("all")
     setDraftFrom("")
     setDraftTo("")
+    setDraftErrorsOnly(false)
+    setDraftMinDurationMs("")
     setMethod("")
     setStatus("")
     setDateRange("all")
     setFrom("")
     setTo("")
+    setErrorsOnly(false)
+    setMinDurationMs("")
     setPage(1)
     setFilterError(null)
     setFiltersOpen(false)
@@ -352,6 +373,9 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
         }
         const now = Date.now()
         const dateBounds = getDateRangeBounds(dateRange, from, to, now)
+        const parsedMinDuration = minDurationMs.trim() === ""
+          ? undefined
+          : Number(minDurationMs)
         const result = await getRequests(
           page,
           20,
@@ -362,6 +386,8 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
           dateBounds.to,
           sortBy,
           sortDirection,
+          errorsOnly ? true : undefined,
+          parsedMinDuration,
         )
         if (active) {
           if (
@@ -399,7 +425,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
       active = false
       clearInterval(interval)
     }
-  }, [page, search, method, status, dateRange, from, to, sortBy, sortDirection])
+  }, [page, search, method, status, dateRange, from, to, sortBy, sortDirection, errorsOnly, minDurationMs])
 
   return (
     <main className="p-6">
@@ -432,7 +458,7 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
             />
             <Input
               className="pl-8"
-              placeholder="Search requests..."
+              placeholder="Search path, route, or trace id..."
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value)
@@ -520,6 +546,28 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                           <option key={option} value={option}>{option}</option>
                         ))}
                       </Select>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 border-t pt-4 sm:grid-cols-2">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border"
+                        checked={draftErrorsOnly}
+                        onChange={(event) => setDraftErrorsOnly(event.target.checked)}
+                      />
+                      Errors only
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Min duration (ms)
+                      <Input
+                        aria-label="Minimum duration in milliseconds"
+                        inputMode="numeric"
+                        placeholder="e.g. 500"
+                        value={draftMinDurationMs}
+                        onChange={(event) => setDraftMinDurationMs(event.target.value)}
+                      />
                     </label>
                   </div>
 
@@ -719,10 +767,14 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
               <tr
                 key={request.id}
                 className="cursor-pointer border-b last:border-b-0 hover:bg-muted/40"
-                onClick={() => onSelectRequest(request)}
+                onClick={() => {
+                  saveTraceNavigation({ traceIds: requests.map((item) => item.id) })
+                  onSelectRequest(request)
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
+                    saveTraceNavigation({ traceIds: requests.map((item) => item.id) })
                     onSelectRequest(request)
                   }
                 }}
@@ -735,9 +787,16 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
                 </td>
                 <td className="px-4 py-3 font-mono">{request.path}</td>
                 <td className="px-4 py-3">
-                  <Badge className={statusBadgeClass(request.statusCode)}>
-                    {request.statusCode ?? "—"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={statusBadgeClass(request.statusCode)}>
+                      {request.statusCode ?? "—"}
+                    </Badge>
+                    {request.hasError && (
+                      <Badge variant="destructive" className="text-[10px] uppercase">
+                        Error
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="max-w-48 px-4 py-3" title={userIdentity(request.user)}>
                   <span className="block truncate">

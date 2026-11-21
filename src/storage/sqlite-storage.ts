@@ -432,6 +432,8 @@ export default class SQLiteStorage {
         startedAtTo?: number,
         sortField: TraceSummarySortField = "startedAt",
         sortDirection: TraceSummarySortDirection = "desc",
+        hasError?: boolean,
+        minDurationMs?: number,
     ): {
         summaries: ITraceSummary[];
         total: number;
@@ -485,6 +487,17 @@ export default class SQLiteStorage {
         if (startedAtTo !== undefined) {
             conditions.push("t.started_at < ?");
             parameters.push(startedAtTo);
+        }
+
+        if (hasError === true) {
+            conditions.push("t.has_error = 1");
+        } else if (hasError === false) {
+            conditions.push("t.has_error = 0");
+        }
+
+        if (minDurationMs !== undefined) {
+            conditions.push("t.duration_ms IS NOT NULL AND t.duration_ms >= ?");
+            parameters.push(minDurationMs);
         }
 
         const whereClause = conditions.length > 0

@@ -94,7 +94,7 @@ function ExecutionTreeNode({
   const typeLabel = spanTypeLabel(node.span)
   const isSelectable = node.span.type === "database" || node.span.type === "http.client"
   const isSelected = node.span.spanId === selectedSpanId
-  const isSlow = !hasError && isSlowSpan(node.span.durationMs, slowSpanThresholdMs)
+  const isSlow = isSlowSpan(node.span.durationMs, slowSpanThresholdMs)
   const repeatCount = databaseRepeatCounts?.get(node.span.spanId)
   const isRepeated = node.span.type === "database" && repeatCount !== undefined && repeatCount >= 2
   const repeatedBadgeLabel = isRedisSpan(node.span)
@@ -113,6 +113,7 @@ function ExecutionTreeNode({
   const connector = depth === 0 ? null : isLast ? "└──" : "├──"
   const row = (
     <div
+      data-span-id={node.span.spanId}
       className={`rounded px-2 py-1.5 text-sm ${
         isSelected
           ? "bg-muted"
@@ -135,6 +136,14 @@ function ExecutionTreeNode({
               className="h-auto shrink-0 border-info/30 bg-info/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-info"
             >
               {repeatedBadgeLabel}{repeatCount !== undefined ? ` ×${repeatCount}` : ""}
+            </Badge>
+          )}
+          {hasError && (
+            <Badge
+              variant="outline"
+              className="h-auto shrink-0 border-destructive/30 bg-destructive/15 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-destructive"
+            >
+              Error
             </Badge>
           )}
           {isSlow && (

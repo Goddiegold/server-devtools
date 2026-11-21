@@ -304,6 +304,59 @@ async function run() {
     assert.deepEqual(combinedQuerySearchBody.data.map((request: { id: string }) => request.id), ['trace-query-search']);
     assert.equal(combinedQuerySearchBody.pagination.total, 1);
 
+    const errorFilterTrace: IDevToolsTrace = {
+      traceId: 'trace-filter-error',
+      rootSpanId: 'root-filter-error',
+      startedAt: 5000,
+      durationMs: 120,
+      spans: [{
+        traceId: 'trace-filter-error',
+        spanId: 'root-filter-error',
+        type: 'http.server',
+        name: 'GET /filter-error',
+        startedAt: 5000,
+        durationMs: 120,
+        attributes: {
+          'http.request.method': 'GET',
+          'url.path': '/filter-error',
+          'http.response.status_code': 500,
+        },
+        status: { code: 2 },
+        error: { message: 'filterable failure' },
+      }],
+    };
+    storage.saveSpan(errorFilterTrace.spans[0]);
+    storage.saveTraceSummary(errorFilterTrace.spans[0]);
+
+    storage.saveSpan({
+      traceId: 'trace-filter-slow',
+      spanId: 'root-filter-slow',
+      type: 'http.server',
+      name: 'GET /filter-slow',
+      startedAt: 5001,
+      durationMs: 900,
+      attributes: {
+        'http.request.method': 'GET',
+        'url.path': '/filter-slow',
+        'http.response.status_code': 200,
+      },
+      status: { code: 0 },
+    });
+    storage.saveTraceSummary(storage.getSpansByTraceId('trace-filter-slow')[0]);
+
+    const errorsOnlyResponse = await apiFetch('/_devtools/api/requests?hasError=1&search=filter-error');
+    assert.equal(errorsOnlyResponse.status, 200);
+    const errorsOnlyBody = await errorsOnlyResponse.json();
+    assert.deepEqual(errorsOnlyBody.data.map((request: { id: string }) => request.id), ['trace-filter-error']);
+
+    const minDurationResponse = await apiFetch('/_devtools/api/requests?minDurationMs=500&search=filter-slow');
+    assert.equal(minDurationResponse.status, 200);
+    const minDurationBody = await minDurationResponse.json();
+    assert.deepEqual(minDurationBody.data.map((request: { id: string }) => request.id), ['trace-filter-slow']);
+
+    const invalidHasErrorResponse = await apiFetch('/_devtools/api/requests?hasError=yes');
+    assert.equal(invalidHasErrorResponse.status, 400);
+
     const clearedFiltersResponse = await apiFetch('/_devtools/api/requests?search=&method=&status=');
     assert.equal(clearedFiltersResponse.status, 200);
     const clearedFiltersBody = await clearedFiltersResponse.json();
@@ -311,7 +364,7 @@ async function run() {
     assert.deepEqual(clearedFiltersBody.pagination, {
       page: 1,
       limit: 20,
-      total: 26,
+      total: 28,
       totalPages: 2,
       hasMore: true,
     });
@@ -415,6 +468,25 @@ async function run() {
       executionResponseBody[0].children[0].span.spanId,
       "db-execution"
     );
+
+    storage.saveSpan({
+      traceId: "trace-execution",
+      spanId: "db-error",
+      parentSpanId: "root-execution",
+      type: "database",
+      name: "SELECT fail",
+      startedAt: 1040,
+      durationMs: 4,
+      attributes: {},
+      status: { code: 2, message: "db timeout" },
+    });
+
+    const errorsResponse = await apiFetch('/_devtools/api/traces/trace-execution/errors');
+    assert.equal(errorsResponse.status, 200);
+    const errorsBody = await errorsResponse.json();
+    assert.equal(errorsBody.length, 1);
+    assert.equal(errorsBody[0].spanId, "db-error");
+    assert.equal(errorsBody[0].message, "db timeout");
 
     const clearHistoryResponse = await apiFetch('/_devtools/api/traces', { method: 'DELETE' });
 

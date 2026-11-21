@@ -32,6 +32,8 @@ export async function getRequests(
   to?: number,
   sortBy: RequestsSortField = "startedAt",
   sortDirection: RequestsSortDirection = "desc",
+  hasError?: boolean,
+  minDurationMs?: number,
 ): Promise<IRequestsResponse> {
   const params = new URLSearchParams({
     page: String(page),
@@ -55,6 +57,12 @@ export async function getRequests(
   }
   params.set("sortBy", sortBy)
   params.set("sortDirection", sortDirection)
+  if (hasError !== undefined) {
+    params.set("hasError", hasError ? "1" : "0")
+  }
+  if (minDurationMs !== undefined) {
+    params.set("minDurationMs", String(minDurationMs))
+  }
 
   const response = await apiFetch(
     `/_devtools/api/requests?${params.toString()}`
