@@ -8,9 +8,14 @@ export function postgresDatabaseGroupKey(
     }
 
     const query = attributes["db.query.text"];
-    if (typeof query !== "string" || query.trim() === "") {
+    if (typeof query !== "string") {
         return undefined;
     }
 
-    return `postgresql:${normalizeSqlTemplate(query)}`;
+    const template = normalizeSqlTemplate(query);
+    if (!template) {
+        return undefined;
+    }
+
+    return `postgresql:${template}`;
 }

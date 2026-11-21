@@ -8,7 +8,7 @@ import {
 
 export { mysqlDatabaseGroupKey } from "./mysql";
 export { mongodbDatabaseGroupKey } from "./mongodb";
-export { normalizeSqlTemplate } from "./sql-template";
+export { MAX_SQL_TEMPLATE_INPUT_LENGTH, normalizeSqlTemplate } from "./sql-template";
 export { postgresDatabaseGroupKey } from "./postgres";
 export {
     formatRedisCommandPattern,
@@ -43,6 +43,25 @@ export interface RedisSpanRepeatStats {
     totalDurationMs: number;
 }
 
+function isRedisDatabaseSpan(attributes: Record<string, unknown>): boolean {
+    return attributes["db.system.name"] === "redis";
+}
+
+export function relationalDatabaseSpanGroupKey(
+    span: DatabaseSpanForRepeatDetection,
+): string | undefined {
+    if (span.type !== "database" || isRedisDatabaseSpan(span.attributes)) {
+        return undefined;
+    }
+
+    return (
+        postgresDatabaseGroupKey(span.attributes)
+        ?? mysqlDatabaseGroupKey(span.attributes)
+        ?? mongodbDatabaseGroupKey(span.attributes)
+    );
+}
+
+/** @deprecated Use relationalDatabaseSpanGroupKey or redisDatabaseGroupKey explicitly. */
 export function databaseSpanGroupKey(
     span: DatabaseSpanForRepeatDetection,
 ): string | undefined {
@@ -51,21 +70,53 @@ export function databaseSpanGroupKey(
     }
 
     return (
-        postgresDatabaseGroupKey(span.attributes)
-        ?? mysqlDatabaseGroupKey(span.attributes)
-        ?? mongodbDatabaseGroupKey(span.attributes)
+        relationalDatabaseSpanGroupKey(span)
         ?? redisDatabaseGroupKey(span.attributes)
     );
 }
 
+function durationMsForAggregation(durationMs: unknown): number {
+    return typeof durationMs === "number" && Number.isFinite(durationMs)
+        ? Math.max(0, durationMs)
+        : 0;
+}
+
+function systemFromGroupKey(groupKey: string): string {
+    const separator = groupKey.indexOf(":");
+    return separator === -1 ? "database" : groupKey.slice(0, separator);
+}
+
+function summaryFromGroupKey(groupKey: string): string {
+    const separator = groupKey.indexOf(":");
+    return separator === -1 ? groupKey : groupKey.slice(separator + 1);
+}
+
+export interface DatabaseQueryRepeatSummary {
+    groupKey: string;
+    system: string;
+    summary: string;
+    count: number;
+    totalDurationMs: number;
+    averageDurationMs: number;
+}
+
+export interface DatabaseSpanRepeatStats {
+    groupKey: string;
+    system: string;
+    summary: string;
+    count: number;
+    totalDurationMs: number;
+    averageDurationMs: number;
+}
+
 export function countDatabaseSpanRepeats(
-    spans: DatabaseSpanForRepeatDetection[],
+    spans: SpanForRepeatDetection[],
 ): Map<string, number> {
     const groupCounts = new Map<string, number>();
     const spanGroups = new Map<string, string>();
 
     for (const span of spans) {
-        const groupKey = databaseSpanGroupKey(span);
+        const groupKey = relationalDatabaseSpanGroupKey(span);
         if (!groupKey) {
             continue;
         }
@@ -84,6 +135,75 @@ export function countDatabaseSpanRepeats(
     }
 
     return repeats;
+}
+
+export function summarizeDatabaseQueryRepeats(
+    spans: SpanForRepeatDetection[],
+): DatabaseQueryRepeatSummary[] {
+    const groups = new Map<string, {
+        count: number;
+        totalDurationMs: number;
+    }>();
+
+    for (const span of spans) {
+        const groupKey = relationalDatabaseSpanGroupKey(span);
+        if (!groupKey) {
+            continue;
+        }
+
+        const durationMs = durationMsForAggregation(span.durationMs);
+        const existing = groups.get(groupKey);
+
+        if (existing) {
+            existing.count += 1;
+            existing.totalDurationMs += durationMs;
+            continue;
+        }
+
+        groups.set(groupKey, { count: 1, totalDurationMs: durationMs });
+    }
+
+    return [...groups.entries()]
+        .filter(([, group]) => group.count >= 2)
+        .map(([groupKey, group]) => ({
+            groupKey,
+            system: systemFromGroupKey(groupKey),
+            summary: summaryFromGroupKey(groupKey),
+            count: group.count,
+            totalDurationMs: group.totalDurationMs,
+            averageDurationMs: group.count > 0
+                ? group.totalDurationMs / group.count
+                : 0,
+        }))
+        .sort((left, right) => right.count - left.count || right.totalDurationMs - left.totalDurationMs);
+}
+
+export function buildDatabaseSpanRepeatStats(
+    spans: SpanForRepeatDetection[],
+): Map<string, DatabaseSpanRepeatStats> {
+    const summaries = new Map(
+        summarizeDatabaseQueryRepeats(spans).map((summary) => [summary.groupKey, summary]),
+    );
+    const stats = new Map<string, DatabaseSpanRepeatStats>();
+
+    for (const span of spans) {
+        const groupKey = relationalDatabaseSpanGroupKey(span);
+        const summary = groupKey ? summaries.get(groupKey) : undefined;
+        if (!summary) {
+            continue;
+        }
+
+        stats.set(span.spanId, {
+            groupKey: summary.groupKey,
+            system: summary.system,
+            summary: summary.summary,
+            count: summary.count,
+            totalDurationMs: summary.totalDurationMs,
+            averageDurationMs: summary.averageDurationMs,
+        });
+    }
+
+    return stats;
 }
 
 function isRedisSpan(span: DatabaseSpanForRepeatDetection): boolean {
@@ -187,4 +307,16 @@ export function buildRedisSpanRepeatStats(
     }
 
     return stats;
+}
+
+export function buildExecutionDatabaseRepeatCounts(
+    spans: SpanForRepeatDetection[],
+): Map<string, number> {
+    const counts = countDatabaseSpanRepeats(spans);
+
+    for (const [spanId, stats] of buildRedisSpanRepeatStats(spans)) {
+        counts.set(spanId, stats.count);
+    }
+
+    return counts;
 }

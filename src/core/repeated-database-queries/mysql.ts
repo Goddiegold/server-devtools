@@ -9,9 +9,14 @@ export function mysqlDatabaseGroupKey(
     }
 
     const query = attributes["db.query.text"];
-    if (typeof query !== "string" || query.trim() === "") {
+    if (typeof query !== "string") {
         return undefined;
     }
 
-    return `mysql:${normalizeSqlTemplate(query)}`;
+    const template = normalizeSqlTemplate(query);
+    if (!template) {
+        return undefined;
+    }
+
+    return `mysql:${template}`;
 }

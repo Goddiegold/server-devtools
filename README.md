@@ -16,7 +16,8 @@ It gives you a live dashboard for inspecting:
 -   database operations
 -   errors
 -   timing and slow-span highlighting in execution traces
--   repeated SQL, MongoDB, and Redis commands within a single request
+-   repeated-query detection for PostgreSQL, MySQL (`mysql2`), MongoDB, and
+    Redis command patterns within a single request
 -   current/authenticated user context
 -   server-side request search
 -   request filtering by HTTP method and status
@@ -535,6 +536,54 @@ POST /users
 This makes it easier to understand what your backend executed during a
 request and where time was spent.
 
+Child spans at or above the configured slow threshold are marked **Slow**
+(default 500 ms via `slowSpanThresholdMs` or
+`SERVER_DEVTOOLS_SLOW_SPAN_THRESHOLD_MS`).
+
+### Repeated query detection (per request)
+
+Within one HTTP request trace, ServerDevTools groups database operations
+that share the same normalized shape and highlights groups with **two or
+more** executions:
+
+-   **PostgreSQL** and **MySQL (`mysql2`)** — SQL templates normalize
+    placeholders and inline literals to `?` (for example `$1` / `?` / `42`
+    for the same `SELECT … WHERE id = ?` shape). Operations are not
+    grouped when query text is missing, oversize, or multi-statement.
+-   **MongoDB** — groups by operation, collection, and normalized filter
+    **shape** (parameter values replaced with placeholders in the
+    fingerprint; captured filter JSON in the span may still show real
+    values).
+-   **Redis (ioredis)** — separate **Repeated Command** grouping by
+    normalized command pattern (keys and value arguments masked in the
+    pattern).
+
+Grouping uses stable fingerprints derived from sanitized shapes, not raw
+parameter values. Fingerprints never include Redis or SQL parameter values
+used for grouping.
+
+On the **Execution** tab you get:
+
+-   **Repeated Database Queries** — per-group execution count, cumulative
+    duration, and average duration (PostgreSQL, MySQL2, MongoDB).
+-   **Repeated Redis Commands** — per-pattern count and cumulative
+    duration.
+-   **Repeated Query** / **Repeated Command** badges on matching spans;
+    selecting a span shows group counts and timings in database details.
+
+Detection is **scoped to the current request only** — it does not compare
+across requests or label patterns as N+1 automatically.
+
+Example routes in `examples/dashboard/server.ts` (with local databases
+running):
+
+``` bash
+curl -i http://localhost:3000/repeated-database-queries
+curl -i http://localhost:3000/repeated-mysql2-queries
+curl -i http://localhost:3000/repeated-redis-commands
+curl -i http://localhost:3000/repeated-redis-mysql2
+```
+
 ------------------------------------------------------------------------
 
 ## How It Works
@@ -615,9 +664,11 @@ Redis command spans include command inspection, arguments, timings, request
 links, and command errors. Redis (ioredis) support has been verified in
 Express and NestJS applications, including pipelines and transactions.
 
-The execution view groups identical database or Redis operations that repeat
-within one request and surfaces **Repeated** / **Repeated Command** badges,
-including a Redis summary with count and cumulative duration.
+The execution view detects repeated operations within one request. SQL and
+MongoDB groups show execution count, cumulative duration, and average
+duration in **Repeated Database Queries**. Redis shows **Repeated Command**
+summaries with count and cumulative duration. See [Repeated query detection
+(per request)](#repeated-query-detection-per-request) above.
 
 ------------------------------------------------------------------------
 

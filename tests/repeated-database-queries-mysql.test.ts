@@ -56,6 +56,13 @@ test("mysql grouping treats literal parameter variations as the same query", () 
     assert.equal(repeats.has("mysql-3"), false);
 });
 
+test("mysql group key rejects multi-statement batches", () => {
+    assert.equal(mysqlDatabaseGroupKey({
+        "db.system.name": "mysql",
+        "db.query.text": "SELECT 1; SELECT 2",
+    }), undefined);
+});
+
 test("mysql repeats are isolated per request trace", () => {
     const spans = [
         databaseSpan("mysql-a-1", "trace-a", "SELECT * FROM users WHERE id = ?"),

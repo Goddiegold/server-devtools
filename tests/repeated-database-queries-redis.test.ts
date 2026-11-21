@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+    buildExecutionDatabaseRepeatCounts,
     buildRedisSpanRepeatStats,
     countDatabaseSpanRepeats,
     normalizeRedisCommandPattern,
@@ -100,11 +101,12 @@ test("mixed Redis commands only repeat within their own pattern", () => {
         redisSpan("h2", "HGET a:2 name", 1),
     ];
 
-    const repeats = countDatabaseSpanRepeats(spans);
+    const repeats = buildExecutionDatabaseRepeatCounts(spans);
 
     assert.equal(repeats.get("g1"), 2);
     assert.equal(repeats.get("s1"), 2);
     assert.equal(repeats.get("h1"), 2);
+    assert.equal(countDatabaseSpanRepeats(spans).size, 0);
 });
 
 test("repeated Redis commands are isolated per request trace", () => {
@@ -116,8 +118,8 @@ test("repeated Redis commands are isolated per request trace", () => {
         redisSpan("b1", "GET user:1", 1),
     ];
 
-    assert.equal(countDatabaseSpanRepeats(traceASpans).size, 2);
-    assert.equal(countDatabaseSpanRepeats(traceBSpans).size, 0);
+    assert.equal(buildExecutionDatabaseRepeatCounts(traceASpans).size, 2);
+    assert.equal(buildExecutionDatabaseRepeatCounts(traceBSpans).size, 0);
 });
 
 test("handles missing Redis query attributes gracefully", () => {

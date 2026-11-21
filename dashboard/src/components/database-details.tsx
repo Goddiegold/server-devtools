@@ -33,10 +33,18 @@ function KeyValueRows({ values }: { values: Record<string, string> }) {
 export function DatabaseDetails({
   span,
   repeatCount,
+  databaseRepeatStats,
   redisRepeatStats,
 }: {
   span: IDevToolsSpan
   repeatCount?: number
+  databaseRepeatStats?: {
+    system: string
+    summary: string
+    count: number
+    totalDurationMs: number
+    averageDurationMs: number
+  }
   redisRepeatStats?: {
     command: string
     pattern: string
@@ -59,6 +67,11 @@ export function DatabaseDetails({
     detailRows.push(["Command pattern", redisRepeatStats.pattern])
     detailRows.push(["Executions in request", String(redisRepeatStats.count)])
     detailRows.push(["Cumulative duration", `${redisRepeatStats.totalDurationMs.toFixed(2)}ms`])
+  } else if (databaseRepeatStats) {
+    detailRows.push(["Query pattern", databaseRepeatStats.summary])
+    detailRows.push(["Executions in request", String(databaseRepeatStats.count)])
+    detailRows.push(["Cumulative duration", `${databaseRepeatStats.totalDurationMs.toFixed(2)}ms`])
+    detailRows.push(["Average duration", `${databaseRepeatStats.averageDurationMs.toFixed(2)}ms`])
   } else if (repeatCount !== undefined && repeatCount >= 2) {
     detailRows.push(["Repeated in request", `${repeatCount} times`])
   }

@@ -88,6 +88,49 @@ const dateRangeOptions: Array<{ value: DateRangePreset; label: string }> = [
   { value: "custom", label: "Custom" },
 ]
 
+function sameRequestsPage(
+  current: IDashboardRequest[],
+  next: IDashboardRequest[],
+  currentPagination: IRequestsPagination | null,
+  nextPagination: IRequestsPagination,
+): boolean {
+  if (!currentPagination) {
+    return false;
+  }
+
+  if (current.length !== next.length) {
+    return false;
+  }
+
+  if (
+    currentPagination.page !== nextPagination.page
+    || currentPagination.total !== nextPagination.total
+    || currentPagination.totalPages !== nextPagination.totalPages
+    || currentPagination.hasMore !== nextPagination.hasMore
+  ) {
+    return false;
+  }
+
+  for (let index = 0; index < current.length; index += 1) {
+    const left = current[index];
+    const right = next[index];
+
+    if (
+      left.id !== right.id
+      || left.method !== right.method
+      || left.path !== right.path
+      || left.statusCode !== right.statusCode
+      || left.durationMs !== right.durationMs
+      || left.startedAt !== right.startedAt
+      || left.hasError !== right.hasError
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getDateRangeBounds(
   preset: DateRangePreset,
   from: string,
@@ -138,10 +181,11 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   const [filterError, setFilterError] = useState<string | null>(null)
   const [pagination, setPagination] = useState<IRequestsPagination | null>(null)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestsRef = useRef(requests)
   requestsRef.current = requests
+  const paginationRef = useRef(pagination)
+  paginationRef.current = pagination
   const [pendingDelete, setPendingDelete] = useState<IDashboardRequest | null>(null)
   const [deletingTraceId, setDeletingTraceId] = useState<string | null>(null)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
@@ -299,14 +343,12 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
   useEffect(() => {
     let active = true
 
-    async function loadRequests() {
+    async function loadRequests(silent: boolean) {
       const isInitial = requestsRef.current.length === 0
 
       try {
         if (isInitial) {
           setLoading(true)
-        } else {
-          setRefreshing(true)
         }
         const now = Date.now()
         const dateBounds = getDateRangeBounds(dateRange, from, to, now)
@@ -322,12 +364,21 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
           sortDirection,
         )
         if (active) {
-          setRequests(result.data)
-          setPagination(result.pagination)
+          if (
+            !sameRequestsPage(
+              requestsRef.current,
+              result.data,
+              paginationRef.current,
+              result.pagination,
+            )
+          ) {
+            setRequests(result.data)
+            setPagination(result.pagination)
+          }
           setError(null)
         }
       } catch (requestError) {
-        if (active) {
+        if (active && !silent) {
           setError(
             requestError instanceof Error
               ? requestError.message
@@ -335,15 +386,14 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
           )
         }
       } finally {
-        if (active) {
+        if (active && isInitial) {
           setLoading(false)
-          setRefreshing(false)
         }
       }
     }
 
-    void loadRequests()
-    const interval = setInterval(() => void loadRequests(), 1000)
+    void loadRequests(false)
+    const interval = setInterval(() => void loadRequests(true), 1000)
 
     return () => {
       active = false
@@ -589,16 +639,8 @@ export function RequestsPage({ onSelectRequest }: RequestsPageProps) {
         </div>
       )}
 
-      {refreshing && requests.length > 0 && (
-        <p className="mb-3 text-xs text-muted-foreground" role="status" aria-live="polite">
-          Refreshing requests…
-        </p>
-      )}
-
-      <div
-        className={`overflow-hidden rounded-md border ${refreshing ? "opacity-90 motion-safe:transition-opacity" : ""}`}
-      >
-        <table className="w-full text-sm" aria-busy={loading || refreshing}>
+      <div className="overflow-hidden rounded-md border">
+        <table className="w-full text-sm" aria-busy={loading}>
           <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
               <th aria-sort={sortAriaValue("method")} className="px-4 py-3 font-medium">

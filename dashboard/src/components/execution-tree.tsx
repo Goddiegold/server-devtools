@@ -97,7 +97,9 @@ function ExecutionTreeNode({
   const isSlow = !hasError && isSlowSpan(node.span.durationMs, slowSpanThresholdMs)
   const repeatCount = databaseRepeatCounts?.get(node.span.spanId)
   const isRepeated = node.span.type === "database" && repeatCount !== undefined && repeatCount >= 2
-  const repeatedBadgeLabel = isRedisSpan(node.span) ? "Repeated Command" : "Repeated"
+  const repeatedBadgeLabel = isRedisSpan(node.span)
+    ? "Repeated Command"
+    : "Repeated Query"
   const durationMs = Number.isFinite(node.span.durationMs)
     ? Math.max(0, node.span.durationMs)
     : 0

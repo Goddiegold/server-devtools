@@ -283,6 +283,36 @@ async function bootstrap() {
     }
   });
 
+  app.get("/repeated-redis-commands", async (_req, res) => {
+    try {
+      const getKeys = ["cache:a", "cache:b", "cache:c", "cache:d"];
+      const hashKeys = ["profile:1", "profile:2", "profile:3", "profile:4"];
+
+      for (const key of getKeys) {
+        await redis.get(key);
+      }
+
+      for (const key of hashKeys) {
+        await redis.hget(key, "name");
+      }
+
+      res.json({
+        ok: true,
+        database: "redis",
+        hint:
+          "Execution tab: Repeated Redis Commands (GET ? and HGET ? name groups).",
+        patterns: [
+          { command: "GET", executions: getKeys.length },
+          { command: "HGET", executions: hashKeys.length },
+        ],
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   app.get("/redis-failed", async (_req, res) => {
     try {
       await redis.call("SERVERDEVTOOLS_INVALID_COMMAND");
@@ -380,6 +410,92 @@ async function bootstrap() {
     }
   });
 
+  app.get("/repeated-mysql2-queries", async (_req, res) => {
+    try {
+      const ids = [1, 2, 3, 4, 5];
+      let rowCount = 0;
+
+      for (const id of ids) {
+        const [rows] = await mysql2Pool.execute(
+          "SELECT * FROM users WHERE id = ?",
+          [id],
+        );
+        rowCount += Array.isArray(rows) ? rows.length : 0;
+      }
+
+      for (const id of ids) {
+        await mysql2Pool.execute(
+          "SELECT email FROM users WHERE id = ?",
+          [id],
+        );
+      }
+
+      res.json({
+        ok: true,
+        database: "mysql2",
+        hint:
+          "Execution tab: Repeated Database Queries (two normalized SELECT shapes).",
+        repeatedQueries: ids.length * 2,
+        rowCount,
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/repeated-redis-mysql2", async (_req, res) => {
+    const payload: {
+      ok: boolean;
+      hint: string;
+      redis?: { patterns: Array<{ command: string; executions: number }> };
+      mysql2?: { repeatedQueries: number; rowCount: number };
+      error?: string;
+    } = {
+      ok: true,
+      hint:
+        "One trace: Repeated Redis Commands plus Repeated Database Queries (MySQL2).",
+    };
+
+    try {
+      const getKeys = ["smoke:1", "smoke:2", "smoke:3"];
+      for (const key of getKeys) {
+        await redis.get(key);
+      }
+      payload.redis = {
+        patterns: [{ command: "GET", executions: getKeys.length }],
+      };
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    try {
+      const ids = [1, 2, 3, 4];
+      let rowCount = 0;
+      for (const id of ids) {
+        const [rows] = await mysql2Pool.execute(
+          "SELECT * FROM users WHERE id = ?",
+          [id],
+        );
+        rowCount += Array.isArray(rows) ? rows.length : 0;
+      }
+      payload.mysql2 = {
+        repeatedQueries: ids.length,
+        rowCount,
+      };
+    } catch (error) {
+      payload.ok = false;
+      payload.error = error instanceof Error ? error.message : String(error);
+    }
+
+    res.status(payload.ok ? 200 : 503).json(payload);
+  });
+
   app.get("/repeated-mongodb", async (_req, res) => {
     try {
       const userIds = [1, 2, 3];
@@ -404,6 +520,93 @@ async function bootstrap() {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  });
+
+  app.get("/repeated-database-queries", async (_req, res) => {
+    const ids = [1, 2, 3, 4];
+    const result: {
+      ok: boolean;
+      hint: string;
+      postgresql?: { repeatedQueries: number; rowCount: number };
+      mysql2?: { repeatedQueries: number; rowCount: number };
+      mongodb?: { repeatedQueries: number; docCount: number };
+      errors?: string[];
+    } = {
+      ok: true,
+      hint:
+        "Open this request in the dashboard Execution tab to inspect Repeated Database Queries (count, total, avg).",
+    };
+
+    const errors: string[] = [];
+
+    try {
+      let pgRows = 0;
+      for (const id of ids) {
+        const queryResult = await postgresPool.query(
+          "SELECT * FROM users WHERE id = $1",
+          [id],
+        );
+        pgRows += queryResult.rows.length;
+      }
+      result.postgresql = {
+        repeatedQueries: ids.length,
+        rowCount: pgRows,
+      };
+    } catch (error) {
+      errors.push(
+        `postgresql: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    try {
+      let mysqlRows = 0;
+      for (const id of ids) {
+        const [rows] = await mysql2Pool.execute(
+          "SELECT * FROM users WHERE id = ?",
+          [id],
+        );
+        mysqlRows += Array.isArray(rows) ? rows.length : 0;
+      }
+      result.mysql2 = {
+        repeatedQueries: ids.length,
+        rowCount: mysqlRows,
+      };
+    } catch (error) {
+      errors.push(
+        `mysql2: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    try {
+      let docCount = 0;
+      for (const userId of ids) {
+        const docs = await users
+          .find({ userId })
+          .limit(5)
+          .toArray();
+        docCount += docs.length;
+      }
+      result.mongodb = {
+        repeatedQueries: ids.length,
+        docCount,
+      };
+    } catch (error) {
+      errors.push(
+        `mongodb: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    if (errors.length > 0) {
+      result.errors = errors;
+      result.ok = errors.length < 3;
+    }
+
+    if (!result.postgresql && !result.mysql2 && !result.mongodb) {
+      res.status(503).json(result);
+      return;
+    }
+
+    res.json(result);
   });
 
   app.get("/error-test", () => {

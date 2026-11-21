@@ -22,8 +22,10 @@ import { ExecutionTree } from "@/components/execution-tree"
 import { DatabaseDetails } from "@/components/database-details"
 import { HttpClientDetails } from "@/components/http-client-details"
 import {
+  buildDatabaseSpanRepeatStats,
+  buildExecutionDatabaseRepeatCounts,
   buildRedisSpanRepeatStats,
-  countDatabaseSpanRepeats,
+  summarizeDatabaseQueryRepeats,
   summarizeRedisCommandRepeats,
 } from "@/lib/repeated-database-queries"
 import { DEFAULT_SLOW_SPAN_THRESHOLD_MS } from "@/lib/slow-span"
@@ -514,11 +516,19 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
   }))]
   const isRequestError = errorSpans.length > 0 || (status !== undefined && Number(status) >= 400)
   const databaseRepeatCounts = useMemo(
-    () => countDatabaseSpanRepeats(trace?.spans ?? []),
+    () => buildExecutionDatabaseRepeatCounts(trace?.spans ?? []),
+    [trace],
+  )
+  const databaseQueryRepeatSummaries = useMemo(
+    () => summarizeDatabaseQueryRepeats(trace?.spans ?? []),
     [trace],
   )
   const redisRepeatSummaries = useMemo(
     () => summarizeRedisCommandRepeats(trace?.spans ?? []),
+    [trace],
+  )
+  const databaseSpanRepeatStats = useMemo(
+    () => buildDatabaseSpanRepeatStats(trace?.spans ?? []),
     [trace],
   )
   const redisSpanRepeatStats = useMemo(
@@ -658,6 +668,34 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
 
               {!executionLoading && !executionError && executionTree && executionTree.length > 0 && (
                 <>
+                  {databaseQueryRepeatSummaries.length > 0 && (
+                    <div className="mb-4 space-y-2 rounded-md border border-info/20 bg-info/10 p-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-info">
+                        Repeated Database Queries
+                      </h3>
+                      <ul className="space-y-1 text-sm">
+                        {databaseQueryRepeatSummaries.map((summary) => (
+                          <li key={summary.groupKey} className="flex flex-wrap items-center gap-2 font-mono">
+                            <Badge
+                              variant="outline"
+                              className="border-info/30 bg-info/15 text-info"
+                            >
+                              Repeated
+                            </Badge>
+                            <span className="uppercase text-xs text-muted-foreground">{summary.system}</span>
+                            <span className="min-w-0 break-all">{summary.summary}</span>
+                            <span className="text-muted-foreground">×{summary.count}</span>
+                            <span className="text-muted-foreground">
+                              {summary.totalDurationMs.toFixed(2)}ms total
+                            </span>
+                            <span className="text-muted-foreground">
+                              {summary.averageDurationMs.toFixed(2)}ms avg
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {redisRepeatSummaries.length > 0 && (
                     <div className="mb-4 space-y-2 rounded-md border border-info/20 bg-info/10 p-3">
                       <h3 className="text-xs font-semibold uppercase tracking-wide text-info">
@@ -698,6 +736,7 @@ export function TraceDetailsPage({ traceId, onBack, onDeleted }: TraceDetailsPag
                     <DatabaseDetails
                       span={selectedSpan}
                       repeatCount={databaseRepeatCounts.get(selectedSpan.spanId)}
+                      databaseRepeatStats={databaseSpanRepeatStats.get(selectedSpan.spanId)}
                       redisRepeatStats={redisSpanRepeatStats.get(selectedSpan.spanId)}
                     />
                   )}

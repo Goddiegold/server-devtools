@@ -1,3 +1,7 @@
+import { utf8ByteLength } from "./utf8-byte-length";
+
+const MAX_MONGO_QUERY_TEXT_LENGTH = 8_192;
+
 function normalizeMongoFilterShape(value: unknown): unknown {
     if (value === null || typeof value !== "object") {
         return "?";
@@ -36,6 +40,10 @@ export function mongodbDatabaseGroupKey(
 
     const queryText = attributes["db.query.text"];
     if (typeof queryText === "string" && queryText.trim() !== "") {
+        if (utf8ByteLength(queryText) > MAX_MONGO_QUERY_TEXT_LENGTH) {
+            return `mongodb:${operation}@${collection}`;
+        }
+
         try {
             const parsed = JSON.parse(queryText) as unknown;
             const shape = JSON.stringify(normalizeMongoFilterShape(parsed));
