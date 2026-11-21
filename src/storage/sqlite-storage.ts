@@ -24,6 +24,9 @@ export default class SQLiteStorage {
         private readonly encryptionService?: EncryptDecryptService,
     ) {
         this.db = new DatabaseSync(path);
+        this.db.exec(
+            `PRAGMA busy_timeout = ${Math.max(0, Math.floor(Config.STORAGE.BUSY_TIMEOUT_MS))}`,
+        );
 
         this.initialize();
     }
