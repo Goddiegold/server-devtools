@@ -80,6 +80,10 @@ export default class SpanMapper {
             return 'database';
         }
 
+        if (span.attributes['server-devtools.type'] === 'custom') {
+            return 'custom';
+        }
+
         if (span.attributes['express.type']) {
             return 'framework';
         }

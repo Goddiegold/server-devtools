@@ -5,6 +5,7 @@ export type IDevToolsSpanType =
   | 'http.client'
   | 'database'
   | 'framework'
+  | 'custom'
   | 'unknown';
 
 export interface IDevToolsSpan {

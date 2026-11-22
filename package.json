@@ -32,6 +32,11 @@
     "build": "npm run clean && npm run build:sdk && npm run build:dashboard",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
+    "express:example:start": "tsx examples/dashboard/server.ts",
+    "express:example": "npm run build:dashboard && npm run express:example:start",
+    "nest:example:build": "node scripts/ensure-nest-example-sdk-link.cjs && rm -f examples/nestjs/tsconfig.tsbuildinfo && cd examples/nestjs && nest build",
+    "nest:example:start": "cd examples/nestjs && NODE_OPTIONS='--import ./server-devtools.mjs' node dist/main.js",
+    "nest:example": "npm run build:sdk && npm run nest:example:build && npm run nest:example:start",
     "prepublishOnly": "npm run test && npm run typecheck && npm run build"
   },
   "keywords": [
@@ -66,6 +71,7 @@
     "rate-limiter-flexible": "^11.2.3"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.12",
     "@nestjs/common": "^11.2.3",
     "@nestjs/core": "^11.2.3",
     "@nestjs/platform-express": "^11.2.3",

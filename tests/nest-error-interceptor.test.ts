@@ -1,57 +1,55 @@
-import assert from 'node:assert/strict';
-import { of, throwError, lastValueFrom } from 'rxjs';
-import { SpanStatusCode, trace } from '@opentelemetry/api';
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { lastValueFrom, throwError } from "rxjs";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 
-///@ts-ignoreß
-import ServerDevToolsNestInterceptor from '../src/integrations/nestjs/server-devtools-nest.interceptor';
+import ServerDevToolsNestInterceptor from "../src/integrations/nestjs/server-devtools-nest.interceptor";
 
-const interceptor = new ServerDevToolsNestInterceptor();
+test("Nest interceptor records handler errors on the active span", async () => {
+    const interceptor = new ServerDevToolsNestInterceptor();
 
-let recordedError: unknown;
-let recordedStatus: unknown;
+    let recordedError: unknown;
+    let recordedStatus: unknown;
 
-const fakeSpan = {
-  recordException(error: unknown) {
-    recordedError = error;
-  },
+    const fakeSpan = {
+        recordException(error: unknown) {
+            recordedError = error;
+        },
 
-  setStatus(status: unknown) {
-    recordedStatus = status;
-  },
-};
+        setStatus(status: unknown) {
+            recordedStatus = status;
+        },
+    };
 
-const originalGetActiveSpan = trace.getActiveSpan;
+    const originalGetActiveSpan = trace.getActiveSpan;
 
-(trace as any).getActiveSpan = () => fakeSpan;
+    (trace as { getActiveSpan: typeof trace.getActiveSpan }).getActiveSpan = () =>
+        fakeSpan as ReturnType<typeof trace.getActiveSpan>;
 
-const error = new Error('Something went wrong');
+    const error = new Error("Something went wrong");
 
-const next = {
-  handle() {
-    return throwError(() => error);
-  },
-};
+    const next = {
+        handle() {
+            return throwError(() => error);
+        },
+    };
 
+    try {
+        await assert.rejects(
+            () =>
+                lastValueFrom(
+                    interceptor.intercept({} as never, next as never),
+                ),
+            error,
+        );
 
-async function run() {
-  try {
-    await lastValueFrom(
-      interceptor.intercept({} as any, next as any),
-    );
-
-    assert.fail('Expected interceptor to rethrow');
-  } catch (caughtError) {
-    assert.equal(caughtError, error);
-  }
-}
-
-run();
-
-assert.equal(recordedError, error);
-
-assert.deepEqual(recordedStatus, {
-  code: SpanStatusCode.ERROR,
-  message: 'Something went wrong',
+        assert.equal(recordedError, error);
+        assert.deepEqual(recordedStatus, {
+            code: SpanStatusCode.ERROR,
+            message: "Something went wrong",
+        });
+    } finally {
+        (trace as { getActiveSpan: typeof trace.getActiveSpan }).getActiveSpan =
+            originalGetActiveSpan;
+    }
 });
-
-(trace as any).getActiveSpan = originalGetActiveSpan;

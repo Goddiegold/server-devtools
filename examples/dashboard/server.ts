@@ -609,14 +609,37 @@ async function bootstrap() {
     res.json(result);
   });
 
+  class PaymentProcessingService {
+    async processPayment() {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    async updateWallet() {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    @ServerDevTools.Track("payment-processing")
+    async checkout() {
+      await this.processPayment();
+      await this.updateWallet();
+    }
+  }
+
+  const paymentService = new PaymentProcessingService();
+
+  app.get("/track-payment-processing", async (_req, res) => {
+    await paymentService.checkout();
+    res.json({ success: true, via: "service-track" });
+  });
+
   app.get("/error-test", () => {
     throw new Error("ServerDevTools test error");
   });
 
-  app.get("/fetch-test", async (_req, res) => {
-    const response = await fetch(
-      "http://localhost:3000/external-test",
-      {
+  class FetchTestService {
+    @ServerDevTools.Track("bad-fetch-test")
+    async run() {
+      const response = await fetch("http://localhost:3000/external-test", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -626,12 +649,16 @@ async function bootstrap() {
           name: "Godwin",
           source: "fetch",
         }),
-      },
-    );
+      });
 
-    const data = await response.json();
+      return response.json();
+    }
+  }
 
-    res.json(data);
+  const fetchTestService = new FetchTestService();
+
+  app.get("/fetch-test", async (_req, res) => {
+    res.json(await fetchTestService.run());
   });
 
   app.get("/fetch-concurrent-test", async (_req, res) => {
