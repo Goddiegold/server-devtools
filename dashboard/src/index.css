@@ -28,6 +28,7 @@
     --color-success: var(--success);
     --color-warning: var(--warning);
     --color-info: var(--info);
+    --color-custom: var(--custom);
     --color-overlay: var(--overlay);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
@@ -71,6 +72,7 @@
     --success: oklch(0.48 0.15 145);
     --warning: oklch(0.52 0.13 75);
     --info: oklch(0.48 0.16 250);
+    --custom: oklch(0.52 0.17 302);
     --overlay: oklch(0 0 0 / 50%);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
@@ -110,6 +112,7 @@
     --success: oklch(0.76 0.16 145);
     --warning: oklch(0.82 0.15 85);
     --info: oklch(0.76 0.16 250);
+    --custom: oklch(0.74 0.14 302);
     --overlay: oklch(0 0 0 / 70%);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);

@@ -1,4 +1,10 @@
 import { Badge } from "@/components/ui/badge"
+import {
+  CUSTOM_TYPE_BADGE_CLASS,
+  customSpanNameClass,
+  customTimelineBarClass,
+  isCustomSpan,
+} from "@/lib/custom-span-style"
 import { DEFAULT_SLOW_SPAN_THRESHOLD_MS, isSlowSpan } from "@/lib/slow-span"
 import type { IExecutionNode } from "@/types"
 
@@ -60,6 +66,8 @@ function spanTypeLabel(span: IExecutionNode["span"]) {
       return spanAttribute(span, "express.type")?.toLowerCase().includes("middleware")
         ? "MIDDLEWARE"
         : "HANDLER"
+    case "custom":
+      return "CUSTOM"
     default:
       return undefined
   }
@@ -92,7 +100,9 @@ function ExecutionTreeNode({
 }) {
   const hasError = Boolean(node.span.error) || node.span.status.code === 2
   const typeLabel = spanTypeLabel(node.span)
-  const isSelectable = node.span.type === "database" || node.span.type === "http.client"
+  const isCustom = isCustomSpan(node.span)
+  const isSelectable =
+    node.span.type === "database" || node.span.type === "http.client" || isCustom
   const isSelected = node.span.spanId === selectedSpanId
   const isSlow = isSlowSpan(node.span.durationMs, slowSpanThresholdMs)
   const repeatCount = databaseRepeatCounts?.get(node.span.spanId)
@@ -107,7 +117,7 @@ function ExecutionTreeNode({
     ? (durationMs / rootRequestDurationMs) * 100
     : undefined
   const hasTimingBar = percentage !== undefined && (
-    ["http.server", "database", "http.client"].includes(node.span.type)
+    ["http.server", "database", "http.client", "custom"].includes(node.span.type)
     || (node.span.type === "framework" && typeLabel === "HANDLER")
   )
   const connector = depth === 0 ? null : isLast ? "└──" : "├──"
@@ -129,7 +139,17 @@ function ExecutionTreeNode({
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
           {connector && <span className="shrink-0 font-mono text-muted-foreground">{connector}</span>}
-          {typeLabel && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">{typeLabel}</span>}
+          {typeLabel && (
+            <span
+              className={
+                isCustom
+                  ? CUSTOM_TYPE_BADGE_CLASS
+                  : "shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
+              }
+            >
+              {typeLabel}
+            </span>
+          )}
           {isRepeated && (
             <Badge
               variant="outline"
@@ -154,7 +174,9 @@ function ExecutionTreeNode({
               Slow
             </Badge>
           )}
-          <span className="truncate font-mono">{getSpanLabel(node.span)}</span>
+          <span className={`truncate font-mono ${isCustom ? customSpanNameClass(hasError) : ""}`}>
+            {getSpanLabel(node.span)}
+          </span>
         </div>
         <span className={`shrink-0 font-mono text-xs ${isSlow ? "font-medium text-warning" : "text-muted-foreground"}`}>
           {formatDuration(durationMs)}{percentage !== undefined && ` (${percentage.toFixed(1)}%)`}
@@ -163,7 +185,13 @@ function ExecutionTreeNode({
       {hasTimingBar && (
         <div className="ml-1 mt-1 h-0.5 overflow-hidden rounded-full bg-muted/70" aria-label={`${percentage.toFixed(1)}% of request duration`}>
           <div
-            className={`h-full rounded-full ${isSlow ? "bg-warning/80" : "bg-muted-foreground/60"}`}
+            className={`h-full rounded-full ${
+              isCustom
+                ? customTimelineBarClass(isSlow)
+                : isSlow
+                  ? "bg-warning/80"
+                  : "bg-muted-foreground/60"
+            }`}
             style={{ width: `${Math.min(100, percentage)}%` }}
           />
         </div>

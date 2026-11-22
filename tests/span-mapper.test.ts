@@ -39,6 +39,37 @@ const span = {
   },
 } as unknown as ReadableSpan;
 
+const customTrackSpan = {
+  spanContext() {
+    return {
+      traceId: 'trace-123',
+      spanId: 'custom-123',
+      traceFlags: 1,
+    };
+  },
+
+  parentSpanContext: {
+    traceId: 'trace-123',
+    spanId: 'server-123',
+    traceFlags: 1,
+  },
+
+  kind: SpanKind.INTERNAL,
+
+  name: 'payment-processing',
+
+  startTime: [100, 0],
+  duration: [0, 75_000_000],
+
+  attributes: {
+    'server-devtools.type': 'custom',
+  },
+
+  status: {
+    code: 0,
+  },
+} as unknown as ReadableSpan;
+
 const expressSpan = {
   spanContext() {
     return {
@@ -77,6 +108,11 @@ const mongoSpan = { spanContext() { return { traceId: 'trace-123', spanId: 'mong
 const mapper = new SpanMapper(
   new RedactionService(true, Config.DEFAULT_SENSITIVE_HEADER_NAMES),
 );
+
+const customResult = mapper.map(customTrackSpan);
+
+assert.equal(customResult.type, 'custom');
+assert.equal(customResult.attributes['server-devtools.type'], 'custom');
 
 const expressResult = mapper.map(expressSpan);
 

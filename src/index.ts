@@ -13,8 +13,10 @@ import AuthService from "./security/auth.service";
 import RedactionService from "./security/redaction.service";
 import { debugLog } from "./utils/logger";
 import { parseAllowedIps } from "./utils/allowed-ips";
+import { Track } from "./track";
 
 class ServerDevTools {
+    static Track = Track;
     private instrumentation: Instrumentation;
     private dashboard: DashboardServer;
     private storage: SQLiteStorage
@@ -204,3 +206,10 @@ class ServerDevTools {
 
 
 export default ServerDevTools;
+export {
+    Track,
+    runInTrackedSpan,
+    recordSpanError,
+    TRACK_METADATA_KEY,
+    SERVER_DEVTOOLS_TRACK_TYPE_ATTR,
+} from "./track";

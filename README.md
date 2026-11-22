@@ -21,6 +21,7 @@ It gives you a live dashboard for inspecting:
 -   current/authenticated user context
 -   server-side request search
 -   request filtering by HTTP method and status
+-   **custom business spans** via `@Track` (0.3 Custom Instrumentation)
 
 Instead of jumping between logs, traces, and multiple observability
 tools, ServerDevTools lets you inspect what your backend is doing from
@@ -586,6 +587,55 @@ curl -i http://localhost:3000/repeated-redis-mysql2
 
 ------------------------------------------------------------------------
 
+## Custom instrumentation (0.3)
+
+HTTP routes, supported database drivers, Redis, and outbound HTTP are
+**already instrumented**. Use `@Track` on **service methods and domain
+classes** when you need named spans for business logic that automatic
+instrumentation cannot identify (checkout, payment authorization,
+fulfillment, and similar steps).
+
+``` ts
+import ServerDevTools, { Track } from "server-devtools";
+
+class PaymentService {
+  @ServerDevTools.Track("payment-processing")
+  async checkout() {
+    await this.orders.findOne({ id: "123" });
+    await fetch("https://payments.example/charge", { method: "POST" });
+    return { ok: true };
+  }
+}
+```
+
+`Track` wraps the method with OpenTelemetry `startActiveSpan`. Work inside
+the method—including automatic database and outbound HTTP spans—runs as
+**children of the CUSTOM span**. Nested `@Track` calls create nested CUSTOM
+spans. Errors record on the custom span (ERROR status) and **still throw** to
+your application. Use `runInTrackedSpan` from the same package when a
+decorator is not appropriate.
+
+**Do not** decorate Express route handlers or Nest HTTP controller methods;
+those routes already have HTTP spans. Nest `@Track` on a route handler is
+ignored.
+
+Requirements: TypeScript with `experimentalDecorators`; Nest apps need
+`reflect-metadata` loaded before bootstrap; `await devtools.start()` before
+handling traffic.
+
+**Try it** in this repo:
+
+``` bash
+npm run nest:example
+curl http://localhost:3000/nested-database-tracking
+curl "http://localhost:3000/track-isolation-test?tag=demo"
+```
+
+Dashboard **Execution** shows CUSTOM spans in violet with duration bars.
+Full guide: [Custom instrumentation](https://server-devtools-docs.vercel.app/guides/custom-instrumentation).
+
+------------------------------------------------------------------------
+
 ## How It Works
 
 ServerDevTools uses OpenTelemetry instrumentation to observe supported
@@ -649,6 +699,7 @@ ServerDevTools currently supports:
 -   request search and filtering by HTTP method and status
 -   current/authenticated user context when supplied by the application
 -   OpenTelemetry-powered activity capture
+-   `@Track` / `runInTrackedSpan` custom business spans (see [Custom instrumentation (0.3)](#custom-instrumentation-03))
 
 ### Database tracing
 
