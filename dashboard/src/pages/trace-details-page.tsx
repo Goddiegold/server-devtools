@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AlertDialogPrimitive, ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { CustomSpanDetails } from "@/components/custom-span-details"
 import { ExecutionTree } from "@/components/execution-tree"
 import { DatabaseDetails } from "@/components/database-details"
 import { HttpClientDetails } from "@/components/http-client-details"
@@ -789,7 +790,9 @@ export function TraceDetailsPage({
                     {" "}
                     <span className="text-warning">slow spans (≥{slowSpanThresholdMs}ms)</span>,
                     {" "}
-                    <span className="text-info">repeated queries</span>.
+                    <span className="text-info">repeated queries</span>,
+                    {" "}
+                    <span className="text-custom">custom instrumentation</span>.
                   </p>
                   {databaseQueryRepeatSummaries.length > 0 && (
                     <div className="mb-4 space-y-2 rounded-md border border-info/20 bg-info/10 p-3">
@@ -869,6 +872,9 @@ export function TraceDetailsPage({
                       traceId={traceId}
                       span={selectedSpan}
                     />
+                  )}
+                  {selectedSpan?.type === "custom" && (
+                    <CustomSpanDetails span={selectedSpan} />
                   )}
                 </>
               )}
